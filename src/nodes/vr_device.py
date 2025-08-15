@@ -33,6 +33,7 @@ class VRDevice:
         self.q_levels = 7
         self.nb_channels = len(channels)
         self.kappa = 1.e-27
+        self.normalization_factors = self.calc_normalization_factors()
 
     def reset(self):
         self.stall_time = 0.0
@@ -51,22 +52,71 @@ class VRDevice:
         task_response_sizes = task.get_response_sizes()
         self.time_available
 
-        # tx_times = np.zeros((self.q_levels, self.nb_channels))
-        # tx_energies = np.zeros((self.q_levels, self.nb_channels))
-        # rx_times = np.zeros((self.q_levels, self.nb_channels))
-        # rx_energies = np.zeros((self.q_levels, self.nb_channels))
-        # for q in range(0, self.q_levels):
-        #     for ch in range(0, self.nb_channels):
-        #         tx_times[q][ch], tx_energies[q][ch] = self.channels[ch].time_to_tx(task_sizes[q], False)
-        #         rx_times[q][ch], rx_energies[q][ch] = self.channels[ch].time_to_rx(task_response_sizes[q], False)
-        rates = [ch.get_rates() for ch in self.channels]
+        n_task_sizes = (np.array(task_sizes) - self.normalization_factors["size"]["mean"]) / \
+                       self.normalization_factors["size"]["std"]
+        n_task_comp_intensities = (np.array(task_comp_intensities) - self.normalization_factors["comp_intensity"][
+            "mean"]) / self.normalization_factors["comp_intensity"]["std"]
+        n_task_response_sizes = (np.array(task_response_sizes) - self.normalization_factors["response_size"]["mean"]) / \
+                                self.normalization_factors["response_size"]["std"]
 
-        return dict()
+        uplink_rates = np.array([ch.get_uplink_rate() for ch in self.channels])
+        downlink_rates = np.array([ch.get_downlink_rate() for ch in self.channels])
+        uplink_mean = np.array(
+            [self.normalization_factors['channels'][i]['uplink']['mean'] for i in range(len(self.channels))])
+        uplink_std = np.array(
+            [self.normalization_factors['channels'][i]['uplink']['std'] for i in range(len(self.channels))])
+        downlink_mean = np.array([self.normalization_factors['channels'][i]['downlink']['mean'] for i in
+                                  range(len(self.channels))])
+        downlink_std = np.array(
+            [self.normalization_factors['channels'][i]['downlink']['std'] for i in range(len(self.channels))])
+
+        n_uplink_rates = (uplink_rates - uplink_mean) / uplink_std
+        n_downlink_rates = (downlink_rates - downlink_mean) / downlink_std
+
+        return dict(
+            task_sizes=n_task_sizes,
+            task_comp_intensities=n_task_comp_intensities,
+            task_response_sizes=n_task_response_sizes,
+            ch_uplink_rates=n_uplink_rates,
+            ch_downlink_rates=n_downlink_rates
+        )
 
     def get_task(self, ctr: int, t: float) -> Frame:
-        viewport = self.user.get_viewport(ctr)
-        frame = self.video.get_frame(ctr, t, viewport)
+        viewport = self.user.get_viewport(ctr * self.target_fps)
+        frame = self.video.get_frame(ctr, t, viewport, self.target_fps)
         return frame
+
+    def calc_normalization_factors(self):
+        N = int(self.video.length / self.target_fps)
+        frames = []
+        for ctr in range(N):
+            viewport = self.user.get_viewport(ctr)
+            frame = self.video.get_frame(ctr, 0., viewport, self.target_fps)
+            frames.append(frame)
+        frames_sizes = np.array([f.get_sizes() for f in frames])
+        response_sizes = np.array([f.get_response_sizes() for f in frames])
+        comp_intensities = np.array([f.get_computational_intensities() for f in frames])
+        psnr_values = np.array([f.get_psnrs() for f in frames])
+
+        return dict(
+            size=self._normalization_factors(frames_sizes),
+            response_size=self._normalization_factors(response_sizes),
+            comp_intensity=self._normalization_factors(comp_intensities),
+            psnr=self._normalization_factors(psnr_values),
+            channels={i: ch.get_stats() for i, ch in enumerate(self.channels)}
+        )
+
+    def _normalization_factors(self, vec):
+        max_ = np.max(vec, axis=0)
+        min_ = np.min(vec, axis=0)
+        mean_ = np.mean(vec, axis=0)
+        std_ = np.std(vec, axis=0)
+        return {
+            "max": max_,
+            "min": min_,
+            "mean": mean_,
+            "std": std_
+        }
 
     def process(self, arrive_time: float, comp_intensity: float, proceed: bool) -> Tuple[float, float]:
         start = max(arrive_time, self.time_available)
@@ -87,7 +137,7 @@ class VRDevice:
         self.stall_time += max(0., processing_time - self.buffer)
 
         self.buffer = max(0.0, self.buffer - processing_time)
-        self.buffer = max(self.buffer + 1.0 / self.target_fps, 0)
+        self.buffer = max(self.buffer + 1.0, 0)
         self.buffer = min(self.buffer, self.buffer_max)
         self.play_time = processing_time
 

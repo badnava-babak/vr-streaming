@@ -30,6 +30,9 @@ class Frame:
         nominator = np.power(np.power(2, self.bit_depth) - 1, 2)
         return 10 * np.log10(nominator / ymse).mean()
 
+    def get_psnrs(self) -> List[float]:
+        return [self.get_psnr(q) for q in range(self.content.shape[0])]
+
     def get_sizes(self) -> List[int]:
         return [self.get_size(q) for q in range(self.content.shape[0])]
 

@@ -14,6 +14,7 @@ class DeviceStats:
     quality_decision: List[int] = field(default_factory=list)
     offloading_decision: List[int] = field(default_factory=list)
     stall_times: List[float] = field(default_factory=list)
+    rewards: List[float] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return dict(
@@ -23,16 +24,18 @@ class DeviceStats:
             psnr=np.array(self.psnr),
             quality_decision=np.array(self.quality_decision),
             offloading_decision=np.array(self.offloading_decision),
-            stall_times=np.array(self.stall_times)
+            stall_times=np.array(self.stall_times),
+            rewards=np.array(self.rewards)
         )
 
     def summary_stats(self):
         m = {
+            'reward_mean': np.mean(self.rewards),
             'latency_mean': np.mean(self.latency),
             'latency_p95': np.percentile(self.latency, 95),
             'latency_p05': np.percentile(self.latency, 5),
             'energy_mean': np.mean(self.energy_consumption),
-            'energy_p5': np.percentile(self.energy_consumption, 5),
+            'energy_p05': np.percentile(self.energy_consumption, 5),
             'energy_p95': np.percentile(self.energy_consumption, 95),
             'psnr_mean': np.mean(self.psnr),
             'psnr_p05': np.percentile(self.psnr, 5),
@@ -46,6 +49,10 @@ class DeviceStats:
             '4G_ratio': np.mean(np.array(self.offloading_decision) == 2),
             'WiGig_ratio': np.mean(np.array(self.offloading_decision) == 3),
         }
+        for q in range(7):
+            m.update({
+                f'quality_{q}_ratio': np.mean(np.array(self.quality_decision) == q),
+            })
         return m
 
 
@@ -53,9 +60,11 @@ class DeviceStats:
 class EpisodeStats:
     device_stats: List[DeviceStats] = field(default_factory=list)
     stall_events: int = 0
+    w: List[float] = field(default_factory=list)
 
-    def __init__(self, nb_devices: int):
+    def __init__(self, nb_devices: int, w: List[float]):
         self.device_stats = [DeviceStats() for _ in range(nb_devices)]
+        self.w = w
 
     def record_stats(self, device_id: int,
                      latency: float,
@@ -73,6 +82,8 @@ class EpisodeStats:
         self.device_stats[device_id].quality_decision.append(quality_decision)
         self.device_stats[device_id].offloading_decision.append(offloading_decision)
         self.device_stats[device_id].stall_times.append(stall_time)
+        self.device_stats[device_id].rewards.append(
+            self.w[0] * psnr - self.w[1] * latency - self.w[2] * energy_consumption)
 
     def to_dict(self) -> dict:
         return dict(
@@ -86,5 +97,7 @@ class EpisodeStats:
         for d in self.device_stats:
             device_metrics.append(d.summary_stats())
         overall = {k: np.mean([d[k] for d in device_metrics]) for k in device_metrics[0]}
+        overall['stall_time_mean'] = np.mean([d.stall_times[-1] for d in self.device_stats])
+        overall['stall_time_p05'] = np.percentile([d.stall_times[-1] for d in self.device_stats], 5)
+        overall['stall_time_p95'] = np.percentile([d.stall_times[-1] for d in self.device_stats], 95)
         return {'per_device': device_metrics, 'overall': overall}
-

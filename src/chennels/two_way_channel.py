@@ -36,3 +36,9 @@ class TwoWayChannel:
 
     def get_rates(self):
         return [self.get_uplink_rate(), self.get_downlink_rate()]
+
+    def get_stats(self):
+        return {
+            "uplink": self.uplink.get_stats(),
+            "downlink": self.downlink.get_stats(),
+        }

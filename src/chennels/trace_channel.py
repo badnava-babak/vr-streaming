@@ -79,7 +79,7 @@ class TraceChannel(Channel):
         self.ch_type = ch_type
         self.t = trace_df["time_ms"].to_numpy() / 1000.
         self.bps = trace_df["throughput_Mbps"].to_numpy() * 1e6
-        self.Tmax = self.t[-1]
+        self.Tmax = self.t.shape[0]
         self.idx = 0
 
         if ch_type == '5G':
@@ -96,9 +96,14 @@ class TraceChannel(Channel):
         return float(self.bps[int(idx % self.Tmax)])
 
     def sample_rate(self):
-        rate_t = self._rate_at_index(self.idx)
-        rate_t1 = self._rate_at_index(self.idx + 1)
-        return (rate_t + rate_t1) / 2
+        if self.idx >= 2:
+            rate_t = self._rate_at_index(self.idx - 1)
+            rate_t1 = self._rate_at_index(self.idx - 2)
+            return (rate_t + rate_t1) / 2
+        elif self.idx >= 1:
+            return self._rate_at_index(self.idx - 1)
+        else:
+            return 0.
 
     def time_to_tx(self, bits: int, move_forward: bool) -> Tuple[float, float]:
         """
@@ -130,3 +135,23 @@ class TraceChannel(Channel):
             idx += 1
 
         raise RuntimeError("Somthing went wrong in time_to_tx!")
+
+    def max(self):
+        return max(self.bps)
+
+    def min(self):
+        return min(self.bps)
+
+    def mean(self):
+        return np.mean(self.bps)
+
+    def std(self):
+        return np.std(self.bps)
+
+    def get_stats(self):
+        return {
+            'max': self.max(),
+            'min': self.min(),
+            'mean': self.mean(),
+            'std': self.std()
+        }

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from tqdm import tqdm
+
 from src.chennels.two_way_channel import TwoWayChannel
 from src.commons.io import load_all_videos, load_all_users, load_all_traces
-from src.commons.plots import plot_energy_vs_latency, plot_energy_vs_psnr
+from src.commons.plots import plot_metric_distribution, plot_x_vs_y
 from src.commons.stats import EpisodeStats
 from src.envs.elastic_task_offloading import ElasticTaskOffloadingEnv
 from src.nodes.edge_server import EdgeNode
@@ -14,6 +16,9 @@ from matplotlib import pyplot as plt
 import argparse
 from pathlib import Path
 import csv, io
+import numpy as np
+from src.policies.ppg_policy import MultiTaskPPGPolicy, CentralizedMultiTaskPPGPolicy, PPGPolicy
+
 
 def args_to_csv_row(args, *, value_sep=","):
     buf = io.StringIO()
@@ -36,6 +41,7 @@ def parse_args():
                    help="Policy / algorithm name (string)")
 
     p.add_argument("--seed", type=int, default=42, help="RNG seed or run id")
+    p.add_argument("--num_episodes", type=int, default=1000, help="Number of Episodes to train the policy")
 
     p.add_argument("--num-users", type=int, default=5, help="Number of Users in the Environments")
 
@@ -55,37 +61,108 @@ def parse_args():
                    help="Weights of different objective functions. PSNR, Stall Time, and Energy Consumption")
 
     # p.add_argument("--stats-file", required=True, help="Path to pickled EpisodeStats object")
-    p.add_argument("--csv-log", default="results/metrics.csv",
+    p.add_argument("--csv-log", default="results/exp-1.csv",
                    help="CSV file to append results to")
 
     return p.parse_args()
 
 
-def run_sim(args):
-    channels = [
-        TwoWayChannel(channels_5g[0], channels_5g[1]),
-        TwoWayChannel(channels_4g[2], channels_4g[3]),
-        TwoWayChannel(channels_wiGig[0], channels_wiGig[1]),
-    ]
-    edge = EdgeNode(processing_rate=args.edge_proc_speed)
-    vr = VRDevice(channels=channels,
-                  processing_rate=args.device_proc_speed,
-                  cpu_freq=args.device_cpu_freq,
-                  video=videos[args.video_id],
-                  user=video_users[args.video_id][args.user_id]
-                  )
-    optimal_policy = OptimalDecisionMaker(
-        action_dim=(7, len(channels) + 1),
-        weights=(args.weights[0], args.weights[1], args.weights[2])  # psnr, stall time, energy
-    )
-    multi_user_env = ElasticTaskOffloadingEnv(edge, [vr for _ in range(args.num_users)])
-    multi_user_stats = multi_user_env.run(policy=optimal_policy)
+def print_args(args):
+    """Prints all arguments and their values in a formatted way."""
+    print("\n--- Program Arguments ---")
+    for arg, value in vars(args).items():
+        print(f"{arg}: {value}")
+    print("-------------------------\n")
 
+
+def run_sim(args):
+    N = int(args.num_users)
+    C = 3
+
+    vr_users = create_users(args)
+
+    edge = EdgeNode(processing_rate=args.edge_proc_speed)
+
+    multi_user_env = ElasticTaskOffloadingEnv(edge, vr_users,
+                                              weights=(args.weights[0], args.weights[1], args.weights[2]))
+
+    update_timestep = 4  # update policy every n episodes
+
+    policy = None
+    if args.policy == "Optimal":
+        policy = OptimalDecisionMaker(
+            action_dim=(7, C + 1),
+            weights=(args.weights[0], args.weights[1], args.weights[2])  # psnr, stall time, energy
+        )
+        args.num_episodes = 1
+    elif args.policy == "PPG":
+        policy = MultiTaskPPGPolicy(num_channels=C,
+                                    num_users=N,
+                                    weights=(args.weights[0], args.weights[1], args.weights[2])
+                                    # psnr, stall time, energy
+                                    )
+    elif args.policy == "CPPG":
+        policy = CentralizedMultiTaskPPGPolicy(num_channels=C,
+                                               num_users=N,
+                                               weights=(args.weights[0], args.weights[1], args.weights[2])
+                                               # psnr, stall time, energy
+                                               )
+
+    history = []
+    pbar = tqdm(range(args.num_episodes), desc="Initial Description")
+    for ep in pbar:
+        multi_user_stats = multi_user_env.run(policy=policy)
+        history.append(multi_user_stats)
+
+        multi_user_env.reset()
+        if ep % update_timestep == 0:
+            if isinstance(policy, PPGPolicy):
+                policy.update()
+
+        if ep % 10 == 0:
+            stats = multi_user_stats.summary_stats()['overall']
+
+            pbar.set_postfix({
+                'Avg.PSNR:': stats['psnr_mean'],
+                'Avg.Latency:': stats['latency_mean'],
+                'Avg.Energy Consumption:': stats['energy_mean'],
+                'Avg.Reward:': stats['reward_mean']
+            })
+            # pbar.set_description(f"Episode {ep}")
+
+    stats = multi_user_stats.summary_stats()['overall']
+    print(
+        f"Episode: {ep}, Avg. PSNR: {stats['psnr_mean']:.03f}, Avg. Latency: {stats['latency_mean']:.03f}, Avg. Energy Consumption: {stats['energy_mean']:.03f}, Avg. Reward: {stats['reward_mean']:.03f}")
     return multi_user_stats
+
+
+def create_users(args):
+    vr_users = []
+    N = int(args.num_users)
+    np.random.seed(42)  # Set a seed
+    ch_5g_idx = np.random.randint(0, len(channels_5g), size=(N, 2))
+    ch_4g_idx = np.random.randint(0, len(channels_4g), size=(N, 2))
+    ch_wigig_idx = np.random.randint(0, len(channels_wiGig), size=(N, 2))
+    video_idx = np.random.randint(0, 9)
+    for n in range(N):
+        channels = [
+            TwoWayChannel(channels_5g[ch_5g_idx[n][0]], channels_5g[ch_5g_idx[n][1]]),
+            TwoWayChannel(channels_4g[ch_4g_idx[n][0]], channels_4g[ch_4g_idx[n][1]]),
+            TwoWayChannel(channels_wiGig[ch_wigig_idx[n][0]], channels_wiGig[ch_wigig_idx[n][1]]),
+        ]
+        vr = VRDevice(channels=channels,
+                      processing_rate=args.device_proc_speed,
+                      cpu_freq=args.device_cpu_freq,
+                      video=videos[video_idx],
+                      user=video_users[video_idx][args.user_id]
+                      )
+        vr_users.append(vr)
+    return vr_users
 
 
 if __name__ == "__main__":
     args = parse_args()
+    print_args(args)
 
     channels_5g = load_all_traces('5G')
     channels_4g = load_all_traces('4G')
@@ -96,13 +173,13 @@ if __name__ == "__main__":
     multi_user_stats = run_sim(args)
     overall_stats = multi_user_stats.summary_stats()['overall']
     sim_args = args_to_csv_row(args)
-    sim_results = str(list(overall_stats.values()))[1:-1]
+    sim_results = str(list(overall_stats.values()))[1:-1].replace(' ', '')
 
     log_path = Path(args.csv_log)
     if not log_path.exists():
         with log_path.open("a", newline="") as f:
-            colum_names = 'policy,seed,num_users,video_id,user_id,device_proc_speed,device_cpu_freq,edge_proc_speed,w0,w1,w2,csv_log'
-            colum_names += str(list(overall_stats.keys()))[1:-1].replace('\'', '')
+            colum_names = 'policy,seed,num_users,video_id,user_id,device_proc_speed,device_cpu_freq,edge_proc_speed,w0,w1,w2,csv_log,'
+            colum_names += str(list(overall_stats.keys()))[1:-1].replace('\'', '').replace(' ', '')
             # writer = csv.DictWriter(f, fieldnames=list(colum_names))
             # writer.writeheader()
             # writer.writerow(colum_names)
@@ -112,9 +189,16 @@ if __name__ == "__main__":
         with log_path.open("a", newline="") as f:
             f.write(sim_args + ',' + sim_results + "\n")
 
-    # overall_ = {
-    #     'Optimal Solution: 30 Users': multi_user_stats.summary_stats()['overall'],
-    #     'Optimal Solution: 1 User': single_user_stats.summary_stats()['overall'],
+    overall_ = {
+        'Optimal Solution: 30 Users': multi_user_stats.summary_stats()['overall'],
+        #     'Optimal Solution: 1 User': single_user_stats.summary_stats()['overall'],
+    }
+
+    plot_x_vs_y(overall_, x_label='energy', y_label='psnr')
+    plot_x_vs_y(overall_, x_label='latency', y_label='psnr')
+    plot_x_vs_y(overall_, x_label='energy', y_label='latency')
+    #
+    # overall_per_user_stats = {
+    #     'Optimal Solution: 30 Users': multi_user_stats.summary_stats()['per_device']
     # }
-    # plot_energy_vs_psnr(overall_)
-    # plot_energy_vs_latency(overall_)
+    # plot_metric_distribution(overall_per_user_stats, 'energy_mean')

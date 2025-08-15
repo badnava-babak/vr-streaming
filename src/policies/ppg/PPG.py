@@ -5,6 +5,9 @@ from torch.distributions import Dirichlet
 from torch.distributions import Categorical
 import numpy as np
 
+from src.policies.ppg.buffer import RolloutBuffer
+from src.policies.ppg.model import ActorCritic
+
 seed = 0
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
@@ -23,156 +26,9 @@ else:
 print("============================================================================================")
 
 
-################################## PPO Policy ##################################
-class RolloutBuffer:
-    def __init__(self):
-        self.actions = []
-        self.states = []
-        self.logprobs = []
-        self.rewards = []
-        self.state_values = []
-        self.is_terminals = []
-
-    def clear(self):
-        del self.actions[:]
-        del self.states[:]
-        del self.logprobs[:]
-        del self.rewards[:]
-        del self.state_values[:]
-        del self.is_terminals[:]
-
-
-class Actor(nn.Module):
-
-    def __init__(self, state_dim, action_dim, independent_agents, action_max, mid_layer_size,
-                 testing_stage=False) -> None:
-        super().__init__()
-        # self.l1 = nn.Linear(state_dim, 64)
-        # self.a1 = nn.Tanh()
-        # self.l2 = nn.Linear(64, 64)
-        # self.a2 = nn.Tanh()
-        # self.l3 = nn.Linear(64, action_dim)
-
-        self.action_dim = action_dim
-        self.independent_agents = independent_agents
-        self.testing_stage = testing_stage
-
-        self.action_max = action_max
-        if independent_agents:
-            self.shared_layers = nn.Sequential(
-                nn.Linear(state_dim[0], mid_layer_size),
-                nn.ReLU(),
-                nn.Linear(mid_layer_size, 128),
-                nn.ReLU(),
-            )
-            self.aux_value = nn.Linear(128, 1)
-        else:
-            self.shared_layers = nn.Sequential(
-                nn.Conv1d(state_dim[0], 16, 3, stride=1),
-                nn.ReLU(),
-                nn.Flatten(),
-                nn.Linear(mid_layer_size, 128),
-                nn.ReLU(),
-            )
-
-            self.aux_value = nn.Linear(128, state_dim[0])
-
-        if independent_agents:
-            self.action_logits = nn.Linear(128, action_dim[0])
-            self.action = nn.Softmax(dim=-1)
-        else:
-            self.action_logits = nn.Linear(128, action_dim[0] * action_dim[1])
-            self.reshaped_action = nn.Unflatten(-1, self.action_dim)
-            # self.reshaped_action = torch.reshape(self.action_logits, self.action_dim)
-            self.action = nn.Softmax(dim=-1)
-
-    def forward(self, x):
-        emb = self.shared_layers(x)
-
-        action_emb = self.action_logits(emb)
-
-        if self.independent_agents:
-            action_out = self.action(action_emb)
-        else:
-            reshaped_action = self.reshaped_action(action_emb)
-            # if self.testing_stage:
-            # reshaped_action = reshaped_action / 10
-            action_out = self.action(reshaped_action)
-            # action_out = torch.reshape(action_out, self.action_dim)
-
-        aux_out = self.aux_value(emb)
-        return action_out, aux_out
-
-
-class ActorCritic(nn.Module):
-    def __init__(self, state_dim, action_dim, independent_agents, action_std_init, action_max,
-                 mid_layer_size, testing_stage=False):
-        super(ActorCritic, self).__init__()
-
-        self.independent_agents = independent_agents
-        self.testing_stage = testing_stage
-
-        # actor
-        self.actor = Actor(state_dim, action_dim, independent_agents, action_max, mid_layer_size, testing_stage)
-        if independent_agents:
-            self.critic = nn.Sequential(
-                nn.Linear(state_dim[0], mid_layer_size),
-                nn.ReLU(),
-                nn.Linear(mid_layer_size, 128),
-                nn.ReLU(),
-                nn.Linear(128, 1),
-            )
-        else:
-            self.critic = nn.Sequential(
-                nn.Conv1d(state_dim[0], 16, 3, stride=1),
-                nn.ReLU(),
-                nn.Flatten(),
-                nn.Linear(mid_layer_size, 128),
-                nn.ReLU(),
-                nn.Linear(128, state_dim[0]),
-            )
-
-    def set_action_std(self, new_action_std):
-        if self.has_continuous_action_space:
-            self.action_var = torch.full((self.action_dim,), new_action_std * new_action_std).to(device)
-        else:
-            print("--------------------------------------------------------------------------------------------")
-            print("WARNING : Calling ActorCritic::set_action_std() on discrete action space policy")
-            print("--------------------------------------------------------------------------------------------")
-
-    def forward(self):
-        raise NotImplementedError
-
-    def act(self, state, comp_dist_action=None):
-        action_probs, aux_value = self.actor(torch.unsqueeze(state, 0))
-        dist = Categorical(action_probs)
-        if self.testing_stage:
-            action = action_probs.argmax(dim=1)
-        else:
-            action = dist.sample()
-
-        # action = torch.softmax(action_sampled, dim=1)
-        # if self.has_continuous_action_space:
-
-        action_logprob = dist.log_prob(action)
-        state_val = self.critic(torch.unsqueeze(state, 0))
-
-        return action.detach(), action_logprob.detach(), state_val.detach()[0], aux_value.detach()[0]
-
-    def evaluate(self, state, action):
-        action_probs, aux_value = self.actor(state)
-        dist = Categorical(action_probs)
-
-        action_logprobs = dist.log_prob(action)
-        dist_entropy = dist.entropy()
-        state_values = self.critic(state)
-
-        return action_logprobs, state_values, dist_entropy, aux_value
-
-
 class PPG:
     def __init__(self, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip,
-                 independent_agents, action_std_init=0.6, action_max=1, testing_stage=False, mid_layer_size=656):
+                 centralized, action_std_init=0.6, action_max=1, testing_stage=False, mid_layer_size=656):
 
         self.gamma = gamma
         self.eps_clip = eps_clip
@@ -181,11 +37,12 @@ class PPG:
         self.ppg_repeat = 2
 
         self.training_epoch = 0
+        self.centralized = centralized
 
         self.buffer = RolloutBuffer()
         self.ppg_buffer = RolloutBuffer()
 
-        self.policy = ActorCritic(state_dim, action_dim, independent_agents, action_std_init, action_max,
+        self.policy = ActorCritic(state_dim, action_dim, centralized, action_std_init, action_max,
                                   mid_layer_size, testing_stage).to(device)
         self.optimizer = torch.optim.Adam([
             {'params': self.policy.actor.parameters(), 'lr': lr_actor},
@@ -199,7 +56,7 @@ class PPG:
                                                            step_size_down=2000, mode="exp_range",
                                                            cycle_momentum=False)
 
-        self.policy_old = ActorCritic(state_dim, action_dim, independent_agents, action_std_init,
+        self.policy_old = ActorCritic(state_dim, action_dim, centralized, action_std_init,
                                       action_max, mid_layer_size, testing_stage).to(device)
         self.policy_old.load_state_dict(self.policy.state_dict())
 
@@ -279,6 +136,8 @@ class PPG:
 
         # calculate advantages
         advantages = rewards.detach() - old_state_values.detach()
+        if self.centralized:
+            advantages = advantages.repeat(old_actions.shape[1], 1).T
 
         # Optimize policy for K epochs
         for _ in range(self.K_epochs):
@@ -300,8 +159,10 @@ class PPG:
             #     ratios = torch.prod(ratios, dim=1)
             #     dist_entropy = torch.sum(dist_entropy, dim=1)
 
-            # Finding Surrogate Loss  
+            # Finding Surrogate Loss
+
             # surr1 = torch.clamp(ratios, 0.2, 1.8) * advantages
+            # surr1 = ratios * advantages
             surr1 = ratios * advantages
             surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
 
@@ -311,7 +172,11 @@ class PPG:
 
             loss = ppg_loss - .01 * dist_entropy
             # loss = ppg_loss
-            loss += 0.5 * self.MseLoss(state_values, rewards)
+            value_loss = 0.5 * self.MseLoss(state_values, rewards)
+            if self.centralized:
+                value_loss = value_loss.repeat(loss.shape[1], 1).T
+
+            loss += value_loss
             # loss += self.MseLoss(aux_value, rewards)
             # loss = torch.clamp(loss, -0.5, 0.5)
 

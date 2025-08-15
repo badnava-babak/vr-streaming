@@ -49,7 +49,7 @@ class OptimalDecisionMaker(DecisionMaker):
                     tx_time, tx_energy = vr_device.channels[ch].time_to_tx(task_sizes[q], False)
                     arrival_edge = t + tx_time
                     # process on edge server
-                    exec_time = edge_server.process(arrival_edge, task_comp_intensities[q], False)
+                    exec_time = edge_server.process(arrival_edge, task_comp_intensities[q], 1., False)
                     # edge -> device
                     rx_time, rx_energy = vr_device.channels[ch].time_to_rx(task_response_sizes[q], False)
 
@@ -57,19 +57,20 @@ class OptimalDecisionMaker(DecisionMaker):
                     total_energy = tx_energy + rx_energy
 
                 psnr = task.get_psnr(q)
-
                 stall_times[q][act] = max(0., total_time - vr_device.buffer)
+                # stall_times[q][act] = total_time
                 psnr_vals[q][act] = psnr
                 energy_vals[q][act] = total_energy
 
                 obj_values[q][act] = self.w[0] * psnr
-                obj_values[q][act] -= self.w[1] * stall_times[q][act]
-                # obj_values[q][act] -= self.w[1] * total_time
+                # obj_values[q][act] -= self.w[1] * stall_times[q][act]
+                obj_values[q][act] -= self.w[1] * total_time
                 obj_values[q][act] -= self.w[2] * total_energy
 
-        # psnr_z = (psnr_vals - psnr_vals.mean()) / psnr_vals.std()
-        # stall_z = (stall_times - stall_times.mean()) / stall_times.std()
-        # energy_z = (energy_vals - energy_vals.mean()) / energy_vals.std()
+        psnr_z = (psnr_vals - psnr_vals.min()) / (psnr_vals.max() - psnr_vals.min() + 1.e-10)
+        # stall_z = (stall_times - stall_times.min()) / (stall_times.max() - stall_times.min() + 1.e-10)
+        stall_z = (stall_times) / (stall_times.max() + 1.e-10)
+        energy_z = (energy_vals - energy_vals.min()) / (energy_vals.max() - energy_vals.min() + 1.e-10)
         # obj_values = self.w[0] * psnr_z - self.w[1] * stall_z - self.w[2] * energy_z
 
         optimal_q = np.argmax(obj_values) // 4

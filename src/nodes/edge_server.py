@@ -12,10 +12,11 @@ class EdgeNode:
     def reset(self):
         self.time_available = 0
 
-    def process(self, arrive_time: float, bits: float, proceed: bool) -> float:
+    def process(self, arrive_time: float, bits: float,
+                allocated_portion: float, proceed: bool) -> float:
         """Return finish time of processing."""
         start = max(arrive_time, self.time_available)
-        dur = bits / self.proc_rate
+        dur = bits / (self.proc_rate * allocated_portion)
         if proceed:
             self.time_available = start + dur
         return dur
