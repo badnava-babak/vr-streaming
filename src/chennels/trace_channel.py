@@ -123,7 +123,7 @@ class TraceChannel(Channel):
                 else:
                     energy_consumption += dur * self.tx_power * rate * 1.e-6
                 if move_forward:
-                    self.idx += (idx - self.idx)
+                    self.idx += 1
                 return tx_time, energy_consumption
             else:
                 tx_time += 1.
@@ -133,6 +133,8 @@ class TraceChannel(Channel):
                     energy_consumption += self.tx_power * rate * 1.e-6
             remaining -= rate
             idx += 1
+            if move_forward:
+                self.idx += 1
 
         raise RuntimeError("Somthing went wrong in time_to_tx!")
 

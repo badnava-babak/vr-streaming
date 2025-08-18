@@ -14,6 +14,9 @@ class EdgeNode:
 
     def process(self, arrive_time: float, bits: float,
                 allocated_portion: float, proceed: bool) -> float:
+        if allocated_portion > 1. or allocated_portion < 0.:
+            raise ValueError("Allocated portion must be between 0. and 1.")
+
         """Return finish time of processing."""
         start = max(arrive_time, self.time_available)
         dur = bits / (self.proc_rate * allocated_portion)

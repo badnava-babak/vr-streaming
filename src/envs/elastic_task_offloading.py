@@ -7,6 +7,7 @@ import numpy as np
 from src.commons.stats import EpisodeStats
 from src.nodes.edge_server import EdgeNode
 from src.nodes.vr_device import VRDevice
+from src.policies.bandits_policy import BanditPolicy
 from src.policies.optimal_dm import DecisionMaker, OptimalDecisionMaker
 from src.policies.ppg_policy import PPGPolicy, MultiTaskPPGPolicy, CentralizedMultiTaskPPGPolicy
 
@@ -31,8 +32,7 @@ class ElasticTaskOffloadingEnv:
         for d in self.devices:
             d.reset()
 
-    def run(self,
-            policy: DecisionMaker):
+    def run(self, policy: DecisionMaker):
         self.reset()
 
         t = 0.0
@@ -54,11 +54,9 @@ class ElasticTaskOffloadingEnv:
             # Decision-Making Stage
             if isinstance(policy, OptimalDecisionMaker):
                 for device_id in range(self.nb_devices):
-                    q_idxs[device_id], offloading_decisions[device_id] = policy(step, t, device, self.edge)
-            elif isinstance(policy, MultiTaskPPGPolicy):
-                for device_id in range(self.nb_devices):
-                    q_idxs[device_id], offloading_decisions[device_id] = policy(state[device_id])
-            elif isinstance(policy, CentralizedMultiTaskPPGPolicy):
+                    q_idxs[device_id], offloading_decisions[device_id] = policy(step, t,
+                                                                                self.devices[device_id], self.edge)
+            elif isinstance(policy, PPGPolicy):
                 q_idxs, offloading_decisions = policy(state)
             # tasks arrived
             # TODO: decision making section
@@ -117,7 +115,7 @@ class ElasticTaskOffloadingEnv:
                 rewards.append((task.get_psnr(q_idx), processing_time, energy_consumption))
 
                 # Reward recording
-                if isinstance(policy, MultiTaskPPGPolicy):
+                if isinstance(policy, MultiTaskPPGPolicy) or isinstance(policy, BanditPolicy):
                     policy.record_reward(task.get_psnr(q_idx), processing_time, energy_consumption, t >= 35)
             if isinstance(policy, CentralizedMultiTaskPPGPolicy):
                 policy.record_reward(rewards, t >= 35)

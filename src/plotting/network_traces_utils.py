@@ -90,9 +90,9 @@ def _normalise_df(df: pd.DataFrame) -> pd.DataFrame:
 
 def _load_csv(path: pathlib.Path) -> pd.DataFrame:
     try:
-        df = pd.read_csv(path, header=None, delim_whitespace=True)
+        df = pd.read_csv(path, header=None, sep='\s+')
     except Exception:
-        df = pd.read_csv(path, delim_whitespace=True)
+        df = pd.read_csv(path, sep='\s+')
     if df.shape[1] == 1:
         df['time_s'] = range(1, len(df) + 1)
         df = df.rename(columns={0: "throughput_Mbps"})

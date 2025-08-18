@@ -36,22 +36,27 @@ class MultiTaskPPGPolicy(PPGPolicy):
         self.ppg_agent.buffer.rewards.append(reward)
         self.ppg_agent.buffer.is_terminals.append(done)
 
-    def __call__(self, state) -> Tuple[int, int]:
-        taks_info = []
-        ch_info = []
-        for k, v in state.items():
-            if 'task_' in k:
-                taks_info.append(v)
-            elif 'ch_' in k:
-                ch_info.append(v)
+    def __call__(self, states) -> Tuple[np.array, np.array]:
+        qs = []
+        chs = []
+        for key, state in states.items():
+            taks_info = []
+            ch_info = []
+            for k, v in state.items():
+                if 'task_' in k:
+                    taks_info.append(v)
+                elif 'ch_' in k:
+                    ch_info.append(v)
 
-        ch_info = np.array(ch_info).flatten()
-        s = np.concatenate([np.array(taks_info).flatten(), ch_info])
-        action = self.ppg_agent.select_action(s)[0]
-        # 7 x 4
-        _q = action // 4
-        _ch = action % 4
-        return _q, _ch
+            ch_info = np.array(ch_info).flatten()
+            s = np.concatenate([np.array(taks_info).flatten(), ch_info])
+            action = self.ppg_agent.select_action(s)[0]
+            # 7 x 4
+            _q = action // 4
+            _ch = action % 4
+            qs.append(_q)
+            chs.append(_ch)
+        return np.array(qs), np.array(chs)
 
 
 class CentralizedMultiTaskPPGPolicy(PPGPolicy):

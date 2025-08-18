@@ -129,7 +129,11 @@ class VRDevice:
         return self.kappa * comp_intensity * np.power(self.cpu_freq, 2)
 
     def receive(self, bits: int, channel: int) -> Tuple[float, float]:
-        tx_time, energy_consumption = self.channels[channel].time_to_tx(bits, True)
+        tx_time, energy_consumption = self.channels[channel].time_to_rx(bits, True)
+        for ch in self.channels:
+            if ch == channel:
+                continue
+            ch.time_to_rx(bits, True)
         return tx_time, energy_consumption
 
     def update_buffer(self, processing_time: float):
@@ -144,7 +148,13 @@ class VRDevice:
         return processing_time
 
     def send(self, bits: int, channel: int) -> Tuple[float, float]:
-        return self.channels[channel].time_to_rx(bits, True)
+        tx_time, tx_energy = self.channels[channel].time_to_tx(bits, True)
+        for ch in self.channels:
+            if ch == channel:
+                continue
+            ch.time_to_tx(bits, True)
+
+        return tx_time, tx_energy
 
     @property
     def target_fps(self):

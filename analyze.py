@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib import cm
 
+from src.commons.plots import plot_x_vs_y
+
 
 def plot_3d_scatter(df, metric):
     x = df['w0']
@@ -232,7 +234,22 @@ if __name__ == '__main__':
                        'stall_total',
                        'offload_ratio', '5G_ratio', '4G_ratio', 'WiGig_ratio']
 
-    df = pd.read_csv('results/exp-9.csv', index_col='seed')
+    # df = pd.read_csv('results/ppg-exp/w0_0.8_w1_2.8_w2_0.8.csv')
+    df = pd.read_csv('results/ppg-exp/w0_1.0_w1_1.8_w2_0.2.csv')
+
+    overall_ = {
+        'Decentralized': df[df['policy'] == 'PPG'].iloc[0].to_dict(),
+        'Centralized': df[df['policy'] == 'CPPG'].iloc[0].to_dict(),
+        'Optimal': df[df['policy'] == 'Optimal'].iloc[0].to_dict(),
+        'Epsilon Greedy': df[df['policy'] == 'EGreedy'].iloc[0].to_dict(),
+        #     'Optimal Solution: 1 User': single_user_stats.summary_stats()['overall'],
+    }
+
+    plot_x_vs_y(overall_, x_label='psnr', y_label='reward', error_bar=False)
+    plot_x_vs_y(overall_, x_label='energy', y_label='psnr')
+    plot_x_vs_y(overall_, x_label='latency', y_label='psnr')
+    plot_x_vs_y(overall_, x_label='energy', y_label='latency')
+    plt.show()
 
     agg = (df
            .groupby(["w0", "w1", "w2"], as_index=False)
