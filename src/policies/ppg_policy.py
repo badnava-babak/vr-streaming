@@ -10,6 +10,14 @@ class PPGPolicy(DecisionMaker):
     def update(self):
         self.ppg_agent.update()
 
+    def save_model(self, path):
+        if isinstance(self, PPGPolicy):
+            self.ppg_agent.save(path)
+
+    def load_model(self, path):
+        if isinstance(self, MultiTaskPPGPolicy) or isinstance(self, CentralizedMultiTaskPPGPolicy):
+            self.ppg_agent.load(path)
+
 
 class MultiTaskPPGPolicy(PPGPolicy):
     def __init__(self, num_channels: int,
@@ -29,12 +37,25 @@ class MultiTaskPPGPolicy(PPGPolicy):
         independent = False
         self.ppg_agent = PPG(state_dim, action_dim, lr_actor, lr_critic,
                              gamma, K_epochs, eps_clip, independent,
-                             mid_layer_size=208)
+                             mid_layer_size=208, mode='DeCentralized')
 
-    def record_reward(self, psnr, processing_time, energy_consumption, done):
-        reward = self.w[0] * psnr - self.w[1] * processing_time - self.w[2] * energy_consumption
-        self.ppg_agent.buffer.rewards.append(reward)
-        self.ppg_agent.buffer.is_terminals.append(done)
+    # def record_reward(self, psnr, processing_time, energy_consumption, done):
+    #     reward = self.w[0] * psnr - self.w[1] * processing_time - self.w[2] * energy_consumption
+    #     if (1 - processing_time) < 0.:
+    #         reward += 10 * (1 - processing_time)
+    #     self.ppg_agent.buffer.rewards.append(reward)
+    #     self.ppg_agent.buffer.is_terminals.append(done)
+
+    def record_reward(self, rewards: Tuple[float, float, float], done):
+        # r = np.array(rewards)
+        reward = 0
+        for r in rewards:
+            reward += self.w[0] * r[0] - self.w[1] * r[1] - self.w[2] * r[2]
+            if (1 - r[1]) < 0.:
+                reward += 500 * (1 - r[1])
+        for r in rewards:
+            self.ppg_agent.buffer.rewards.append(reward/len(rewards))
+            self.ppg_agent.buffer.is_terminals.append(done)
 
     def __call__(self, states) -> Tuple[np.array, np.array]:
         qs = []
@@ -77,12 +98,16 @@ class CentralizedMultiTaskPPGPolicy(PPGPolicy):
         independent = True
         self.ppg_agent = PPG(state_dim, action_dim, lr_actor, lr_critic,
                              gamma, K_epochs, eps_clip, independent,
-                             mid_layer_size=208)
+                             mid_layer_size=208, mode='Centralized')
 
     def record_reward(self, rewards: Tuple[float, float, float], done):
-        r = np.array(rewards)
-        reward = self.w[0] * r[:, 0] - self.w[1] * r[:, 1] - self.w[2] * r[:, 2]
-        self.ppg_agent.buffer.rewards.append(reward.mean())
+        # r = np.array(rewards)
+        reward = 0
+        for r in rewards:
+            reward += self.w[0] * r[0] - self.w[1] * r[1] - self.w[2] * r[2]
+            if (1 - r[1]) < 0.:
+                reward += 500 * (1 - r[1])
+        self.ppg_agent.buffer.rewards.append(reward/len(rewards))
         self.ppg_agent.buffer.is_terminals.append(done)
 
     def __call__(self, state) -> Tuple[np.array, np.array]:
@@ -112,3 +137,4 @@ class CentralizedMultiTaskPPGPolicy(PPGPolicy):
             ch_s.append(_ch)
 
         return np.array(q_s), np.array(ch_s)
+

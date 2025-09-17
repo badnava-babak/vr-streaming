@@ -1,19 +1,27 @@
 #!/bin/bash
 #SBATCH -p intel
-#SBATCH -c 1
-#SBATCH --mem=1GB
-#SBATCH -t 00:01:00
-#SBATCH -J test_job
-#SBATCH -e err/%A_%a.out
-#SBATCH -o logs/%A_%a.out
+#SBATCH -c 2
+#SBATCH --mem=2GB
+#SBATCH -t 10:00:00
+#SBATCH -J weight_sweeping
+#SBATCH -e logs/%A_%a.out
+#SBATCH -o out/%A_%a.out
+
+
+SLURM_ARRAY_TASK_ID=2
+NUM_SIM=1000
+
+START_IDX=$((SLURM_ARRAY_TASK_ID * NUM_SIM))
+END_IDX=$(((SLURM_ARRAY_TASK_ID+1) * NUM_SIM))
+
 
 #PARAMS=$(sed "${SLURM_ARRAY_TASK_ID}q;d" params.txt)
 
-STEP=0.1
+STEP=0.01
 source /scratch/b502b586/venv/sdxl/bin/activate
 
+CSV_LOG="/home/b502b586/vr-streaming/results/exp-15/"
 PY_SCRIPT="$(realpath ./run_task_offloading.py)"       # ABSOLUTE path now
-CSV_LOG="/home/b502b586/vr-streaming/results/exp-12/$SLURM_ARRAY_TASK_ID.csv"
 POLICY="Optimal"
 FIXED_ARGS=""                                  # e.g. "--env-config conf.yaml"
 
@@ -47,10 +55,14 @@ run_cmd() {
          $FIXED_ARGS
 }
 
+
+
 # Example usage:
 # calc_weights "$SLURM_ARRAY_TASK_ID" 0.1
-PARAMS=$(calc_weights $SLURM_ARRAY_TASK_ID $STEP)
 
-#echo "These are the parameters for this job: $PARAMS"
+for s in $(seq "$START_IDX" 1 "$END_IDX"); do
+  PARAMS=$(calc_weights $s $STEP)
 
-run_cmd $PARAMS $SLURM_ARRAY_TASK_ID
+  # echo "These are the parameters for this job: $PARAMS --- $s -- $CSV_LOG"
+  run_cmd $PARAMS $s
+done

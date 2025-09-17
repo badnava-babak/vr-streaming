@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List
 import numpy as np
+import pandas as pd
 
 
 @dataclass
@@ -15,6 +16,13 @@ class DeviceStats:
     offloading_decision: List[int] = field(default_factory=list)
     stall_times: List[float] = field(default_factory=list)
     rewards: List[float] = field(default_factory=list)
+    task_size: List[int] = field(default_factory=list)
+    task_res_size: List[int] = field(default_factory=list)
+    comp_intensity: List[int] = field(default_factory=list)
+    rx_times: List[float] = field(default_factory=list)
+    tx_times: List[float] = field(default_factory=list)
+    ch_uplink_rates: List[List[float]] = field(default_factory=list)
+    ch_downlink_rates: List[List[float]] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return dict(
@@ -25,7 +33,18 @@ class DeviceStats:
             quality_decision=np.array(self.quality_decision),
             offloading_decision=np.array(self.offloading_decision),
             stall_times=np.array(self.stall_times),
-            rewards=np.array(self.rewards)
+            rewards=np.array(self.rewards),
+            task_size=np.array(self.task_size),
+            task_res_size=np.array(self.task_res_size),
+            comp_intensity=np.array(self.comp_intensity),
+            rx_time=np.array(self.rx_times),
+            tx_time=np.array(self.tx_times),
+            uplink_5g_rates=np.array(self.ch_uplink_rates)[:, 0],
+            uplink_4g_rates=np.array(self.ch_uplink_rates)[:, 1],
+            uplink_wigig_rates=np.array(self.ch_uplink_rates)[:, 2],
+            downlink_5g_rates=np.array(self.ch_downlink_rates)[:, 0],
+            downlink_4g_rates=np.array(self.ch_downlink_rates)[:, 1],
+            downlink_wigig_rates=np.array(self.ch_downlink_rates)[:, 2],
         )
 
     def summary_stats(self):
@@ -73,7 +92,14 @@ class EpisodeStats:
                      ymse: float,
                      stall_time: float,
                      quality_decision: int,
-                     offloading_decision: int
+                     offloading_decision: int,
+                     task_size: int,
+                     comp_intensity: int,
+                     task_res_size: int,
+                     tx_time: float,
+                     rx_time: float,
+                     ch_uplink_rates: List[float],
+                     ch_downlink_rates: List[float],
                      ):
         self.device_stats[device_id].latency.append(latency)
         self.device_stats[device_id].energy_consumption.append(energy_consumption)
@@ -82,6 +108,13 @@ class EpisodeStats:
         self.device_stats[device_id].quality_decision.append(quality_decision)
         self.device_stats[device_id].offloading_decision.append(offloading_decision)
         self.device_stats[device_id].stall_times.append(stall_time)
+        self.device_stats[device_id].task_size.append(task_size)
+        self.device_stats[device_id].comp_intensity.append(comp_intensity)
+        self.device_stats[device_id].task_res_size.append(task_res_size)
+        self.device_stats[device_id].rx_times.append(rx_time)
+        self.device_stats[device_id].tx_times.append(tx_time)
+        self.device_stats[device_id].ch_uplink_rates.append(ch_uplink_rates)
+        self.device_stats[device_id].ch_downlink_rates.append(ch_downlink_rates)
         self.device_stats[device_id].rewards.append(
             self.w[0] * psnr - self.w[1] * latency - self.w[2] * energy_consumption)
 
@@ -100,4 +133,20 @@ class EpisodeStats:
         overall['stall_time_mean'] = np.mean([d.stall_times[-1] for d in self.device_stats])
         overall['stall_time_p05'] = np.percentile([d.stall_times[-1] for d in self.device_stats], 5)
         overall['stall_time_p95'] = np.percentile([d.stall_times[-1] for d in self.device_stats], 95)
+        overall['deadline_violation'] = (np.array([d.latency for d in self.device_stats]) > 1.).astype(int).mean()
+
+        offloading_decision = np.array([d.offloading_decision for d in self.device_stats]).flatten()
+        local_processing = (offloading_decision == 0).astype(int)
+        quality_decision = np.array([d.quality_decision for d in self.device_stats]).flatten()
+        task_size = np.array([d.task_size for d in self.device_stats]).flatten()
+
+        df = pd.DataFrame(np.stack([task_size, offloading_decision,
+                                    quality_decision, local_processing], axis=1),
+                          columns=['task_size', 'offloading_decision',
+                                   'quality_decision', 'local_processing']
+                          )
+        df['task_size_q'], bins = pd.cut(df['task_size'], 10, labels=False, retbins=True)
+
+        df.groupby(['task_size_q', 'quality_decision']).agg('count')
+
         return {'per_device': device_metrics, 'overall': overall}

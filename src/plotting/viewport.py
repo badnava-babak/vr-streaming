@@ -90,7 +90,7 @@ def build_fov_traces(
 
     # Aggregate every 30 frames (≈1s)
     return {
-        "bitrate": _aggregate_segments(traces_br, SEG_SIZE, op="mean"),
+        "bitrate": _aggregate_segments(traces_br, SEG_SIZE, op="sum"),
         "ymse": _aggregate_segments(traces_ym, SEG_SIZE, op="mean"),
         "psnr": _aggregate_segments(traces_ps, SEG_SIZE, op="mean"),
     }

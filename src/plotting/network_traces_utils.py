@@ -251,20 +251,30 @@ def plot_tx_times_per_qp(
     T = seg_bitrate_Mbps.shape[1]
     x = np.arange(T)
 
-    plt.figure(figsize=(10, 4))
+    fig, ax = plt.subplots(figsize=(7, 6))
+    tx_times = []
     for q in range(7):
-        tx = compute_tx_times(seg_bitrate_Mbps[q], net_df,
-                              seg_duration_s=seg_duration_s)
-        plt.plot(x, tx, label=f"QP {qp_labels[q]}", **plot_kwargs)
+        tx = compute_tx_times(seg_bitrate_Mbps[q], net_df,seg_duration_s=seg_duration_s)
+        tx_times.append(tx)
+
+    p05 = np.quantile(tx_times, 0.05, axis=1)
+    p95 = np.quantile(tx_times, 0.95, axis=1)
+
+    ax.plot(qp_labels, np.mean(tx_times, axis=1), lw=3.5,)
+    ax.fill_between(qp_labels, p05, p95, alpha=0.2, )
+
 
     if vline_every:
         for x0 in range(0, T, vline_every):
             plt.axvline(x0, linestyle="--", alpha=0.3)
 
-    plt.xlabel("Segment index")
-    plt.ylabel("Download time [s]")
-    plt.title("Segment download time vs. QP level")
-    plt.legend()
+    ax.set_xlabel("QP Level", fontsize=18, fontweight='bold')
+    ax.set_ylabel("Download time [s]", fontsize=18, fontweight='bold')
+    ax.grid(color='gray', linestyle='-', linewidth=1, alpha=0.5)
+    # plt.title("Segment download time vs. QP level")
+    ax.legend(fontsize=18, framealpha=.6)
+    ax.tick_params(axis='both', labelsize=18)
+    ax.invert_xaxis()
     plt.tight_layout()
     plt.show()
 
@@ -278,7 +288,7 @@ import matplotlib.pyplot as plt
 # ------------------------------------------------------------------------- #
 # Helper: plot time-aligned statistics of multiple traces
 # ------------------------------------------------------------------------- #
-def plot_time_stats(trace_paths,
+def plot_time_stats(multi_trace_paths,
                     bin_size_s=1.0,
                     align_start=True,
                     max_duration_s=None,
@@ -286,75 +296,85 @@ def plot_time_stats(trace_paths,
                     color_mean="tab:blue",
                     color_band="lightblue",
                     color_p="tab:orange",
-                    color_median="tab:green"):
-    """
-    Plot mean ± std, median, p5 and p95 throughput over time.
+                    color_median="tab:green",
+                    save=None):
 
-    Parameters
-    ----------
-    trace_paths   : list[str | pathlib.Path]
-    bin_size_s    : float, resampling interval (seconds)
-    align_start   : bool
-        True  → time axis starts at 0 for every trace (good for drive tests).
-        False → keep absolute timestamps (requires traces recorded in sync).
-    max_duration_s: float | None
-        Trim all traces to this duration (after alignment) if given.
-    """
+    colors = [
+        '#32CD32',  # Lime Green
+        '#404040',  # Black
+        '#FF4500',  # Orange Red
+        # '#FF6347',  # Tomato
+
+        '#1E90FF',  # Dodger Blue
+        'tab:blue', 'tab:orange', 'tab:red', 'tab:']
+    ls = ['solid', 'dashed', 'dashdot']
     # ---- 1. load & resample each trace to common grid ----------------------
-    series = []
-    for p in trace_paths:
-        df = load_net_trace(p)
-        # convert to seconds offset
-        if align_start:
-            offset = (df["time_ms"] - df["time_ms"].iloc[0]) / 1_000.0
-        else:
-            offset = df["time_ms"] / 1_000.0
-        s = pd.Series(df["throughput_Mbps"].values, index=offset)
-        # resample to regular grid
-        s_reg = s
-        # s_reg = (s
-        #          .sort_index()
-        #          .resample(f"{bin_size_s}S")
-        #          .mean()
-        #          .interpolate("linear"))
-        if max_duration_s is not None:
-            s_reg = s_reg.iloc[: int(max_duration_s // bin_size_s) + 1]
-        series.append(s_reg)
+    fig, ax = plt.subplots(figsize=(7, 6))
+    i = -1
+    for label, trace_paths in multi_trace_paths.items():
+        i += 1
+        series = []
+        for p in trace_paths:
+            df = load_net_trace(p)
+            # convert to seconds offset
+            if align_start:
+                offset = (df["time_ms"] - df["time_ms"].iloc[0]) / 1_000.0
+            else:
+                offset = df["time_ms"] / 1_000.0
+            s = pd.Series(df["throughput_Mbps"].values, index=offset)
+            # resample to regular grid
+            s_reg = s.reset_index(drop=True).sort_index()
+            s_reg
+            # s_reg = (s
+            #          .sort_index()
+            #          .resample(f"{bin_size_s}S")
+            #          .mean()
+            #          .interpolate("linear"))
+            if max_duration_s is not None:
+                s_reg = s_reg.iloc[: int(max_duration_s // bin_size_s) + 1]
+            series.append(s_reg)
 
-    # align by union of all time stamps
-    aligned = pd.concat(series, axis=1)
-    aligned.columns = [pathlib.Path(p).stem for p in trace_paths]
+        # align by union of all time stamps
+        aligned = pd.concat(series, axis=1) / 1000.
+        aligned.columns = [pathlib.Path(p).stem for p in trace_paths]
 
-    # ---- 2. compute stats across traces -----------------------------------
-    mean = aligned.mean(axis=1)
-    std = aligned.std(axis=1)
-    p05 = aligned.quantile(0.05, axis=1)
-    p95 = aligned.quantile(0.95, axis=1)
-    median = aligned.quantile(0.5, axis=1)
+        # ---- 2. compute stats across traces -----------------------------------
+        mean = aligned.mean(axis=1)
+        std = aligned.std(axis=1)
+        p05 = aligned.quantile(0.05, axis=1)
+        p95 = aligned.quantile(0.95, axis=1)
+        median = aligned.quantile(0.5, axis=1)
 
-    t = aligned.index.values.astype(float)
+        t = aligned.index.values.astype(float)
 
-    # ---- 3. plotting -------------------------------------------------------
-    plt.figure(figsize=(10, 4))
-    # mean ± std band
-    plt.fill_between(t, mean - std, mean + std,
-                     color=color_band, alpha=0.4,
-                     label="±1 σ")
-    # mean
-    plt.plot(t, mean, color=color_mean, linewidth=2.0, label="mean")
+        # ---- 3. plotting -------------------------------------------------------
+
+        # mean ± std band
+        ax.fill_between(t, p05, p95, color=colors[i], alpha=0.2,)
+        tt = f"{label} ($\mu={mean.mean():.2f}, \sigma={std.mean():.2f}$)"
+        # mean
+        ax.plot(t, mean, color=colors[i], linewidth=3.5, label=tt, ls=ls[i])
     # p5 / p95
-    plt.plot(t, p05, color=color_p, linestyle="--", label="p5 / p95")
-    plt.plot(t, p95, color=color_p, linestyle="--")
+    # plt.plot(t, p05, color=color_p, linestyle="--", label="p5 / p95")
+    # plt.plot(t, p95, color=color_p, linestyle="--")
     # median
-    plt.plot(t, median, color=color_median, linewidth=1.5, label="median")
+    # plt.plot(t, median, color=color_median, linewidth=1.5, label="median")
 
-    plt.xlabel("Time [s]" if align_start else "Timestamp [s]")
-    plt.ylabel("Throughput [Mbit/s]")
+
+    ax.grid(color='gray', linestyle='-', linewidth=1, alpha=0.5)
+    # plt.title("Segment download time vs. QP level")
+    ax.legend(fontsize=18, framealpha=.6, loc='upper left')
+    ax.tick_params(axis='both', labelsize=18)
+
+    plt.xlabel("Time (s)" if align_start else "Timestamp (s)", fontsize=18, fontweight='bold')
+    plt.ylabel("Throughput (Gbps)", fontsize=18, fontweight='bold')
+
     if title:
         plt.title(title)
-    plt.grid(True, linestyle="--", alpha=0.3)
-    plt.legend()
+
     plt.tight_layout()
+    if save:
+        plt.savefig(save, dpi=300)
     plt.show()
 
     return pd.DataFrame({

@@ -19,10 +19,23 @@ class BanditPolicy(PPGPolicy):
         independent = False
         self.ppg_agent = NeuralEpsilonGreedy(state_dim, action_dim,  epsilon=.2)
 
-    def record_reward(self, psnr, processing_time, energy_consumption, done):
-        reward = self.w[0] * psnr - self.w[1] * processing_time - self.w[2] * energy_consumption
-        self.ppg_agent.buffer.rewards.append(reward)
-        self.ppg_agent.buffer.is_terminals.append(done)
+    # def record_reward(self, psnr, processing_time, energy_consumption, done):
+    #     reward = self.w[0] * psnr - self.w[1] * processing_time - self.w[2] * energy_consumption
+    #     if (1 - processing_time) < 0.:
+    #         reward += 10 * (1 - processing_time)
+    #     self.ppg_agent.buffer.rewards.append(reward)
+    #     self.ppg_agent.buffer.is_terminals.append(done)
+
+    def record_reward(self, rewards: Tuple[float, float, float], done):
+        # r = np.array(rewards)
+        reward = 0
+        for r in rewards:
+            reward += self.w[0] * r[0] - self.w[1] * r[1] - self.w[2] * r[2]
+            if (1 - r[1]) < 0.:
+                reward += 500 * (1 - r[1])
+        for r in rewards:
+            self.ppg_agent.buffer.rewards.append(reward/len(rewards))
+            self.ppg_agent.buffer.is_terminals.append(done)
 
     def __call__(self, states) -> Tuple[np.array, np.array]:
         qs = []

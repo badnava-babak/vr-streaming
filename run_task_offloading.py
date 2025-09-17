@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from tqdm import tqdm
+import os
 
+from tqdm import tqdm
+import json
+import pickle
 from src.chennels.two_way_channel import TwoWayChannel
 from src.commons.io import load_all_videos, load_all_users, load_all_traces
 from src.commons.plots import plot_metric_distribution, plot_x_vs_y
@@ -19,6 +22,8 @@ from pathlib import Path
 import csv, io
 import numpy as np
 from src.policies.ppg_policy import MultiTaskPPGPolicy, CentralizedMultiTaskPPGPolicy, PPGPolicy
+
+from torch.utils.tensorboard import SummaryWriter
 
 
 def args_to_csv_row(args, *, value_sep=","):
@@ -63,8 +68,10 @@ def parse_args():
                    help="Weights of different objective functions. PSNR, Stall Time, and Energy Consumption")
 
     # p.add_argument("--stats-file", required=True, help="Path to pickled EpisodeStats object")
-    p.add_argument("--csv-log", default="results/ppg-exp",
-                   help="CSV file to append results to")
+    p.add_argument("--csv-log", default="results/ppg-exp", help="CSV file to append results to")
+    p.add_argument("--tensorboard", default=False, help="Whether to record tensorboard logs")
+    p.add_argument("--save-model", default=False, help="Whether to save the model")
+    p.add_argument("--load-model", default=False, help="Load a pretrained model to run a test")
 
     return p.parse_args()
 
@@ -110,6 +117,7 @@ def run_sim(args):
                                                weights=(args.weights[0], args.weights[1], args.weights[2])
                                                # psnr, stall time, energy
                                                )
+        args.num_episodes = int(args.num_users) * int(args.num_episodes)
     elif args.policy == "EGreedy":
         policy = BanditPolicy(num_channels=C,
                               num_users=N,
@@ -117,6 +125,13 @@ def run_sim(args):
     else:
         raise ValueError("--policy must be one of the following: Optimal, EGreedy, PPG or CPPG")
 
+    if args.load_model:
+        model_dir = args.csv_log + f"/w0_{args.weights[0]}_w1_{args.weights[1]}_w2_{args.weights[2]}/checkpoints"
+        policy.load_model(f"{model_dir}/{args.policy}.pt")
+
+    # Specify a directory for your logs (e.g., 'runs/my_experiment')
+    if args.tensorboard:
+        writer = SummaryWriter(f"{args.csv_log}/tensorboard/{args.policy}")
     history = []
     pbar = tqdm(range(args.num_episodes), desc="Initial Description", disable=not args.verbose)
     for ep in pbar:
@@ -128,9 +143,8 @@ def run_sim(args):
             if isinstance(policy, PPGPolicy):
                 policy.update()
 
+        stats = multi_user_stats.summary_stats()['overall']
         if ep % 10 == 0 and args.verbose:
-            stats = multi_user_stats.summary_stats()['overall']
-
             pbar.set_postfix({
                 'Avg. PSNR': stats['psnr_mean'],
                 'Avg. Latency': stats['latency_mean'],
@@ -138,18 +152,31 @@ def run_sim(args):
                 'Avg. Reward': stats['reward_mean']
             })
             # pbar.set_description(f"Episode {ep}")
+        if args.tensorboard:
+            writer.add_scalar(f'Avg. Reward', stats['reward_mean'], ep)
+            writer.add_scalar(f'Avg. PSNR', stats['psnr_mean'], ep)
+            writer.add_scalar(f'Avg. Latency', stats['latency_mean'], ep)
+            writer.add_scalar(f'Avg. Energy Consumption', stats['energy_mean'], ep)
 
+    if args.tensorboard:
+        writer.close()
     if args.verbose:
         stats = multi_user_stats.summary_stats()['overall']
         print(
             f"Episode: {ep}, Avg. PSNR: {stats['psnr_mean']:.03f}, Avg. Latency: {stats['latency_mean']:.03f}, Avg. Energy Consumption: {stats['energy_mean']:.03f}, Avg. Reward: {stats['reward_mean']:.03f}")
+
+    if args.save_model:
+        model_dir = args.csv_log + f"/w0_{args.weights[0]}_w1_{args.weights[1]}_w2_{args.weights[2]}/checkpoints"
+        if not os.path.exists(model_dir):
+            os.makedirs(model_dir)
+        policy.save_model(f"{model_dir}/{args.policy}.pt")
     return multi_user_stats
 
 
 def create_users(args):
     vr_users = []
     N = int(args.num_users)
-    np.random.seed(42)  # Set a seed
+    np.random.seed(args.seed)  # Set a seed
     ch_5g_idx = np.random.randint(0, len(channels_5g), size=(N, 2))
     ch_4g_idx = np.random.randint(0, len(channels_4g), size=(N, 2))
     ch_wigig_idx = np.random.randint(0, len(channels_wiGig), size=(N, 2))
@@ -184,11 +211,22 @@ if __name__ == "__main__":
     overall_stats = multi_user_stats.summary_stats()['overall']
 
     program_args = vars(args)
-    weights = {f'w{i}':w for i, w in enumerate(program_args['weights'])}
+    weights = {f'w{i}': w for i, w in enumerate(program_args['weights'])}
 
     stats_to_write = {**overall_stats, **program_args, **weights}
 
-    log_path = Path(args.csv_log + f"/w0_{args.weights[0]}_w1_{args.weights[1]}_w2_{args.weights[2]}.csv")
+    log_dir = args.csv_log + f"/w0_{args.weights[0]}_w1_{args.weights[1]}_w2_{args.weights[2]}"
+    log_path = Path(log_dir)
+    if not log_path.exists():
+        log_path.mkdir(parents=True, exist_ok=False)
+
+    log_path = Path(log_dir + f"/{args.policy}.pkl")
+    with log_path.open("wb") as pkl_f:
+        pickle.dump(multi_user_stats.to_dict(), pkl_f)
+
+
+    # log_path = Path(args.csv_log + f"/w0_{args.weights[0]}_w1_{args.weights[1]}_w2_{args.weights[2]}.csv")
+    log_path = Path(log_dir + f"/stats.csv")
     if not log_path.exists():
         with log_path.open("a", newline="") as f:
             # colum_names = 'policy,seed,num_users,video_id,user_id,device_proc_speed,device_cpu_freq,edge_proc_speed,w0,w1,w2,csv_log,'

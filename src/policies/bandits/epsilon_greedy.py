@@ -153,6 +153,9 @@ class NeuralEpsilonGreedy:
             loss.backward()
             self.optimizer.step()
 
-    import torch
-    import torch.nn as nn
+    def save(self, checkpoint_path):
+        torch.save(self.net.state_dict(), checkpoint_path)
 
+    def load(self, checkpoint_path):
+        self.net.load_state_dict(torch.load(checkpoint_path, map_location=lambda storage, loc: storage))
+        # self.net.load_state_dict(torch.load(checkpoint_path, map_location=lambda storage, loc: storage))

@@ -10,6 +10,12 @@ class DecisionMaker(Callable):
     def __init__(self):
         pass
 
+    def save_model(self, path):
+        pass
+
+    def load_model(self, path):
+        pass
+
 
 class OptimalDecisionMaker(DecisionMaker):
     def __init__(self, action_dim: Tuple[int, int], weights: Tuple[float, float, float]):
@@ -37,6 +43,7 @@ class OptimalDecisionMaker(DecisionMaker):
 
         obj_values = np.zeros(self.action_dim)
         stall_times = np.zeros(self.action_dim)
+        total_times = np.zeros(self.action_dim)
         psnr_vals = np.zeros(self.action_dim)
         energy_vals = np.zeros(self.action_dim)
         for q in range(0, self.q_levels):
@@ -58,7 +65,7 @@ class OptimalDecisionMaker(DecisionMaker):
 
                 psnr = task.get_psnr(q)
                 stall_times[q][act] = max(0., total_time - vr_device.buffer)
-                # stall_times[q][act] = total_time
+                total_times[q][act] = total_time
                 psnr_vals[q][act] = psnr
                 energy_vals[q][act] = total_energy
 
@@ -66,12 +73,17 @@ class OptimalDecisionMaker(DecisionMaker):
                 # obj_values[q][act] -= self.w[1] * stall_times[q][act]
                 obj_values[q][act] -= self.w[1] * total_time
                 obj_values[q][act] -= self.w[2] * total_energy
+                # if (1-total_time) < 0.:
+                #     obj_values[q][act] += 10 * (1 - total_time)
+
 
         psnr_z = (psnr_vals - psnr_vals.min()) / (psnr_vals.max() - psnr_vals.min() + 1.e-10)
         # stall_z = (stall_times - stall_times.min()) / (stall_times.max() - stall_times.min() + 1.e-10)
         stall_z = (stall_times) / (stall_times.max() + 1.e-10)
         energy_z = (energy_vals - energy_vals.min()) / (energy_vals.max() - energy_vals.min() + 1.e-10)
         # obj_values = self.w[0] * psnr_z - self.w[1] * stall_z - self.w[2] * energy_z
+
+        obj_values += 500 * (1 - total_times).clip(-np.inf, 0)
 
         optimal_q = np.argmax(obj_values) // 4
         optimal_ch = np.argmax(obj_values) % 4

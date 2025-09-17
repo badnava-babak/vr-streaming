@@ -4,7 +4,7 @@
 
 # ── edit these paths ───────────────────────────────────────────────
 PY_SCRIPT="$(realpath ./run_task_offloading.py)"       # ABSOLUTE path now
-CSV_LOG="results/exp-12.csv"
+CSV_LOG="results/exp-21"
 POLICY="Optimal"
 FIXED_ARGS=""                                  # e.g. "--env-config conf.yaml"
 # ───────────────────────────────────────────────────────────────────

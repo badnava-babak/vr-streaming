@@ -78,7 +78,10 @@ class VRDevice:
             task_comp_intensities=n_task_comp_intensities,
             task_response_sizes=n_task_response_sizes,
             ch_uplink_rates=n_uplink_rates,
-            ch_downlink_rates=n_downlink_rates
+            ch_downlink_rates=n_downlink_rates,
+            uplink_rates=uplink_rates,
+            downlink_rates=downlink_rates
+
         )
 
     def get_task(self, ctr: int, t: float) -> Frame:

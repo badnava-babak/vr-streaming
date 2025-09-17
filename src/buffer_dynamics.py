@@ -1,7 +1,9 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from src.network_traces_utils import compute_tx_times, load_net_trace
+
+from src.plotting.network_traces_utils import load_net_trace
+from src.plotting.viewport import compute_tx_times
 
 
 # --------------------------------------------------------------------------- #

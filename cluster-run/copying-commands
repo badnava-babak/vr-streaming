@@ -1,0 +1,1 @@
+rsync -r ./  b502b586@front2.ittc.ku.edu:/home/b502b586/vr-streaming/

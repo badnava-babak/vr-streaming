@@ -4,9 +4,11 @@ import pandas as pd
 from sympy import hn1
 
 from src.buffer_dynamics import simulate_buffer, plot_buffer_levels, find_max_fps, plot_stall_vs_fps, plot_stall_vs_fps_multi
-from src.io import load_hn, load_rd
-from src.plotting_utils import plot_traces, plot_qp_sizes, plot_gr
-from src.viewport import build_fov_traces, aggregate_traces
+from src.commons.io import load_hn, load_rd
+from src.plotting.network_traces_utils import load_scenario_files, multi_stats, plot_multi_traces, plot_tx_times_per_qp, \
+    plot_time_stats
+from src.plotting.plotting_utils import plot_traces, plot_qp_sizes, plot_gr
+from src.plotting.viewport import build_fov_traces, compute_tx_times
 
 hmd = load_hn('datasets/navigation/hn.mat')
 rd = load_rd('datasets/navigation/rd.mat')
@@ -18,7 +20,7 @@ hmd  # (12 videos × 12 users) list of Nx4
 qp_labels = [5, 10, 15, 20, 25, 30, 35]  # example QP values
 BITDEPTHS = np.array(
     [8, 8, 8, 8, 8, 8, 8, 8, 8, 10, 10, 8, 8, 8, 8], dtype=int)
-video_id = 13
+video_id = 1
 user_id = 0
 
 traces = build_fov_traces(bitrate[video_id], ymse[video_id], hmd[video_id][user_id], BITDEPTHS[video_id])  # shape (7, N)
@@ -59,7 +61,6 @@ stats = pd.DataFrame({
 print(stats.groupby('QP')['bitrate_Mbps']
       .agg(['mean', 'std', 'min', 'max', 'median']))
 
-from src.network_traces_utils import load_scenario_files, multi_stats, plot_multi_traces, plot_tx_times_per_qp, plot_time_stats
 
 # df = load_net_trace('datasets/Network-Traces/Lumous5G/5G/5g_trace_10_walking')   # two-column CSV
 
@@ -90,7 +91,6 @@ print(multi_stats(sc_traces))  # duration, mean, p95, min / max …
 # -----------------------------------------------------------------
 plot_multi_traces(sc_traces)  # vertical grid every 10 s
 
-from src.viewport import compute_tx_times
 
 # seg_bitrate_Mbps  ← 1-D array for your chosen QP (one value per 1-s segment)
 # net_df            ← DataFrame from load_net_trace() with time_ms + throughput_Mbps

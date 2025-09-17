@@ -28,13 +28,15 @@ if (torch.cuda.is_available()):
 
 class PPG:
     def __init__(self, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip,
-                 centralized, action_std_init=0.6, action_max=1, testing_stage=False, mid_layer_size=656):
+                 centralized, action_std_init=0.6, action_max=1, testing_stage=False, mid_layer_size=656,
+                 mode='Centralized'):
 
         self.gamma = gamma
         self.eps_clip = eps_clip
         self.K_epochs = K_epochs
         self.aux_training_epochs = 6
         self.ppg_repeat = 2
+        self.mode = mode
 
         self.training_epoch = 0
         self.centralized = centralized
@@ -136,8 +138,8 @@ class PPG:
 
         # calculate advantages
         advantages = rewards.detach() - old_state_values.detach()
-        if self.centralized:
-            advantages = advantages.repeat(old_actions.shape[1], 1).T
+        # if self.centralized:
+        #     advantages = advantages.repeat(old_actions.shape[1], 1).T
 
         # Optimize policy for K epochs
         for _ in range(self.K_epochs):
@@ -155,9 +157,9 @@ class PPG:
 
             ratios = torch.exp(diff)
             # ratios = torch.exp(logprobs - old_logprobs.detach())
-            # if not self.has_continuous_action_space:
-            #     ratios = torch.prod(ratios, dim=1)
-            #     dist_entropy = torch.sum(dist_entropy, dim=1)
+            if self.centralized:
+                ratios = torch.prod(ratios, dim=1)
+                dist_entropy = torch.sum(dist_entropy, dim=1)
 
             # Finding Surrogate Loss
 
@@ -173,8 +175,8 @@ class PPG:
             loss = ppg_loss - .01 * dist_entropy
             # loss = ppg_loss
             value_loss = 0.5 * self.MseLoss(state_values, rewards)
-            if self.centralized:
-                value_loss = value_loss.repeat(loss.shape[1], 1).T
+            # if self.centralized:
+            #     value_loss = value_loss.repeat(loss.shape[1], 1).T
 
             loss += value_loss
             # loss += self.MseLoss(aux_value, rewards)

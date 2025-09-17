@@ -76,13 +76,15 @@ class ElasticTaskOffloadingEnv:
                 ch_idx = offloading_decision - 1
 
                 comp_intensity = task.get_computational_intensity(q_idx)
+                task_size = task.get_size(q_idx)
+                task_response_size = task.get_response_size(q_idx)
+                tx_time, rx_time = 0, 0
                 if local_computation:
                     # local computing
                     processing_time, energy_consumption = device.process(t, comp_intensity, True)
                 else:
                     # offload to edge server
-                    task_size = task.get_size(q_idx)
-                    task_response_size = task.get_response_size(q_idx)
+
                     # device -> edge
                     tx_time, tx_energy = device.send(task_size, ch_idx)
                     arrival_edge = t + tx_time
@@ -110,14 +112,20 @@ class ElasticTaskOffloadingEnv:
                                         task.get_ymse(q_idx),
                                         device.stall_time,
                                         q_idx,
-                                        offloading_decision
+                                        offloading_decision,
+                                        task_size,
+                                        comp_intensity,
+                                        task_response_size,
+                                        tx_time, rx_time,
+                                        state[device_id]['uplink_rates'],
+                                        state[device_id]['downlink_rates'],
                                         )
                 rewards.append((task.get_psnr(q_idx), processing_time, energy_consumption))
 
                 # Reward recording
-                if isinstance(policy, MultiTaskPPGPolicy) or isinstance(policy, BanditPolicy):
-                    policy.record_reward(task.get_psnr(q_idx), processing_time, energy_consumption, t >= 35)
-            if isinstance(policy, CentralizedMultiTaskPPGPolicy):
+                # if isinstance(policy, MultiTaskPPGPolicy) or isinstance(policy, BanditPolicy):
+                #     policy.record_reward(task.get_psnr(q_idx), processing_time, energy_consumption, t >= 35)
+            if isinstance(policy, PPGPolicy):
                 policy.record_reward(rewards, t >= 35)
             t += dt
             step += 1
