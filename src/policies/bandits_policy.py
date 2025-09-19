@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, List
 
 from src.policies.bandits.epsilon_greedy import NeuralEpsilonGreedy
 from src.policies.optimal_dm import DecisionMaker
@@ -26,15 +26,15 @@ class BanditPolicy(PPGPolicy):
     #     self.ppg_agent.buffer.rewards.append(reward)
     #     self.ppg_agent.buffer.is_terminals.append(done)
 
-    def record_reward(self, rewards: Tuple[float, float, float], done):
+    def record_reward(self, rewards: List[float], done):
         # r = np.array(rewards)
-        reward = 0
+        # reward = 0
+        # for r in rewards:
+        #     reward += self.w[0] * r[0] - self.w[1] * r[1] - self.w[2] * r[2]
+        #     if (1 - r[1]) < 0.:
+        #         reward += 500 * (1 - r[1])
         for r in rewards:
-            reward += self.w[0] * r[0] - self.w[1] * r[1] - self.w[2] * r[2]
-            if (1 - r[1]) < 0.:
-                reward += 500 * (1 - r[1])
-        for r in rewards:
-            self.ppg_agent.buffer.rewards.append(reward/len(rewards))
+            self.ppg_agent.buffer.rewards.append(np.mean(rewards))
             self.ppg_agent.buffer.is_terminals.append(done)
 
     def __call__(self, states) -> Tuple[np.array, np.array]:

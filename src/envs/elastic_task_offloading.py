@@ -52,11 +52,8 @@ class ElasticTaskOffloadingEnv:
                 state[device_id] = device.get_state(step, t)
 
             # Decision-Making Stage
-            if isinstance(policy, OptimalDecisionMaker):
-                for device_id in range(self.nb_devices):
-                    q_idxs[device_id], offloading_decisions[device_id] = policy(step, t,
-                                                                                self.devices[device_id], self.edge)
-            elif isinstance(policy, PPGPolicy):
+
+            if isinstance(policy, PPGPolicy):
                 q_idxs, offloading_decisions = policy(state)
             # tasks arrived
             # TODO: decision making section
@@ -67,6 +64,10 @@ class ElasticTaskOffloadingEnv:
 
             rewards = []
             for device_id in range(self.nb_devices):
+                if isinstance(policy, OptimalDecisionMaker):
+                    q_idxs[device_id], offloading_decisions[device_id] = policy(step, t,
+                                                                                self.devices[device_id], self.edge)
+
                 task, device = tasks[device_id], self.devices[device_id]
                 q_idx, offloading_decision = q_idxs[device_id], offloading_decisions[device_id]
 
@@ -101,6 +102,14 @@ class ElasticTaskOffloadingEnv:
                     processing_time = tx_time + exec_time + rx_time
                     energy_consumption = rx_energy + tx_energy
 
+                device_reward = (self.w[0] * task.get_psnr(q_idx)
+                                 - self.w[1] * processing_time
+                                 - self.w[2] * energy_consumption)
+                device_reward += (10 * (1 - processing_time) if (1 - processing_time) < 0. else 0.)
+
+                # rewards.append((task.get_psnr(q_idx), processing_time, energy_consumption))
+                rewards.append(device_reward)
+
                 # update playback buffer
                 device.update_buffer(processing_time)
 
@@ -119,8 +128,8 @@ class ElasticTaskOffloadingEnv:
                                         tx_time, rx_time,
                                         state[device_id]['uplink_rates'],
                                         state[device_id]['downlink_rates'],
+                                        device_reward
                                         )
-                rewards.append((task.get_psnr(q_idx), processing_time, energy_consumption))
 
                 # Reward recording
                 # if isinstance(policy, MultiTaskPPGPolicy) or isinstance(policy, BanditPolicy):

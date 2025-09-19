@@ -1,12 +1,9 @@
+import numpy as np
 import torch
 import torch.nn as nn
-from torch.distributions import MultivariateNormal
-from torch.distributions import Dirichlet
-from torch.distributions import Categorical
-import numpy as np
 
 from src.policies.ppg.buffer import RolloutBuffer
-from src.policies.ppg.model import ActorCritic
+from src.policies.ppo.model import ActorCritic
 
 seed = 0
 torch.manual_seed(seed)
@@ -21,22 +18,22 @@ if (torch.cuda.is_available()):
     device = torch.device('cuda:0')
     torch.cuda.empty_cache()
     # print("Device set to : " + str(torch.cuda.get_device_name(device)))
+
+
 # else:
-    # print("Device set to : cpu")
+# print("Device set to : cpu")
 # print("============================================================================================")
 
 
-class PPG:
+class PPO:
     def __init__(self, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip,
-                 centralized, action_std_init=0.6, action_max=1, testing_stage=False, mid_layer_size=656,
-                 mode='Centralized'):
+                 centralized, action_std_init=0.6, action_max=1, testing_stage=False, mid_layer_size=656):
 
         self.gamma = gamma
         self.eps_clip = eps_clip
         self.K_epochs = K_epochs
         self.aux_training_epochs = 6
-        self.ppg_repeat = 2
-        self.mode = mode
+        self.ppg_repeat = 0
 
         self.training_epoch = 0
         self.centralized = centralized
@@ -170,9 +167,9 @@ class PPG:
 
             # final loss of clipped objective PPO
             ppo_loss = -torch.min(surr1, surr2)
-            ppg_loss = torch.where(torch.less(advantages, 0), torch.maximum(ppo_loss, 3. * advantages), ppo_loss)
+            # ppg_loss = torch.where(torch.less(advantages, 0), torch.maximum(ppo_loss, 3. * advantages), ppo_loss)
 
-            loss = ppg_loss - 1.e-4 * dist_entropy
+            loss = ppo_loss - 1.e-4 * dist_entropy
             # loss = ppg_loss
             value_loss = 0.5 * self.MseLoss(state_values, rewards)
             # if self.centralized:
@@ -198,7 +195,7 @@ class PPG:
         self.ppg_buffer.logprobs += old_logprobs
 
         # ppg here
-        if self.training_epoch % self.ppg_repeat == 0:
+        if self.ppg_repeat != 0 and self.training_epoch % self.ppg_repeat == 0:
             # convert list to tensor
             old_states = torch.squeeze(torch.stack(self.ppg_buffer.states, dim=0)).detach().to(device)
             old_actions = torch.squeeze(torch.stack(self.ppg_buffer.actions, dim=0)).detach().to(device)

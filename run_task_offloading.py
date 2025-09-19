@@ -25,6 +25,8 @@ from src.policies.ppg_policy import MultiTaskPPGPolicy, CentralizedMultiTaskPPGP
 
 from torch.utils.tensorboard import SummaryWriter
 
+from src.policies.ppo_policy import PPOPolicy
+
 
 def args_to_csv_row(args, *, value_sep=","):
     buf = io.StringIO()
@@ -111,6 +113,12 @@ def run_sim(args):
                                     weights=(args.weights[0], args.weights[1], args.weights[2])
                                     # psnr, stall time, energy
                                     )
+    elif args.policy == "PPO":
+        policy = PPOPolicy(num_channels=C,
+                           num_users=N,
+                           weights=(args.weights[0], args.weights[1], args.weights[2])
+                           # psnr, stall time, energy
+                           )
     elif args.policy == "CPPG":
         policy = CentralizedMultiTaskPPGPolicy(num_channels=C,
                                                num_users=N,
@@ -223,7 +231,6 @@ if __name__ == "__main__":
     log_path = Path(log_dir + f"/{args.policy}.pkl")
     with log_path.open("wb") as pkl_f:
         pickle.dump(multi_user_stats.to_dict(), pkl_f)
-
 
     # log_path = Path(args.csv_log + f"/w0_{args.weights[0]}_w1_{args.weights[1]}_w2_{args.weights[2]}.csv")
     log_path = Path(log_dir + f"/stats.csv")

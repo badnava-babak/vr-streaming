@@ -13,7 +13,7 @@ from scipy.stats import wasserstein_distance
 
 def plot_x_vs_y(policy_performance_results, x_label, y_label, save: str = None, error_bar=True):
     fig, ax = plt.subplots(figsize=(7, 6))
-    markers = ['^', 'o', '*', 'v']
+    markers = ['^', 'o', '*', 'v', 'd']
     i = -1
     for label, stats in policy_performance_results.items():
         i += 1
@@ -64,13 +64,14 @@ if __name__ == '__main__':
                        'stall_total',
                        'offload_ratio', '5G_ratio', '4G_ratio', 'WiGig_ratio']
 
-    df = pd.read_csv('results/ppg-exp/w0_0.35_w1_0.85_w2_0.15/stats.csv')
-    df = df[df['num_users'].isin([5, 6, 7, 8, 12])]
+    df = pd.read_csv('../results/ppg-exp/w0_0.35_w1_0.85_w2_0.15/stats.csv')
+    df = df[df['num_users'].isin([5, 6, 7, 8,  12])]
     overall_ = {
         'Optimal': df[df['policy'] == 'Optimal'].sort_values(by='num_users'),
         'CPPG': df[df['policy'] == 'CPPG'].sort_values(by='num_users'),
         'IPPG': df[df['policy'] == 'PPG'].sort_values(by='num_users'),
         'EGreedy': df[df['policy'] == 'EGreedy'].sort_values(by='num_users'),
+        'PPO': df[df['policy'] == 'PPO'].sort_values(by='num_users'),
         #     'Optimal Solution: 1 User': single_user_stats.summary_stats()['overall'],
     }
 

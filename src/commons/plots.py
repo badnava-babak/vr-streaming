@@ -46,6 +46,8 @@ def get_label(metric):
         label = "QP 5 Ratio"
     elif metric == 'num_users':
         label = "Number of Users"
+    elif metric == 'task_size':
+        label = "Task Size (Gb)"
     else:
         label = "Unknown Metric"
 
@@ -55,7 +57,7 @@ def get_label(metric):
 
 def plot_x_vs_y(policy_performance_results, x_label, y_label, save: str=None, error_bar=True):
     fig, ax = plt.subplots(figsize=(7, 6))
-    markers = ['^', 'o', '*', 'v']
+    markers = ['^', 'o', '*', 'v', 'd']
     i = -1
     for label, stats in policy_performance_results.items():
         i += 1

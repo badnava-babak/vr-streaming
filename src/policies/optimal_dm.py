@@ -56,6 +56,11 @@ class OptimalDecisionMaker(DecisionMaker):
                     tx_time, tx_energy = vr_device.channels[ch].time_to_tx(task_sizes[q], False)
                     arrival_edge = t + tx_time
                     # process on edge server
+                    # comp_intensities = np.array(
+                    #     [tasks[i].get_computational_intensity(q) for i in range(edge_server.nb_devices)])
+                    # offloaded_computations = ((offloading_decisions != 0).astype(int) * comp_intensities)
+                    # allocated_portion = offloaded_computations[device_id] / offloaded_computations.sum()
+
                     exec_time = edge_server.process(arrival_edge, task_comp_intensities[q], 1., False)
                     # edge -> device
                     rx_time, rx_energy = vr_device.channels[ch].time_to_rx(task_response_sizes[q], False)

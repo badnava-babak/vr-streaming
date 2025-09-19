@@ -265,7 +265,7 @@ if __name__ == '__main__':
     # df = pd.read_csv('results/ppg-exp/w0_0.8_w1_2.8_w2_0.8.csv')
     # df = pd.read_csv('results/ppg-exp/w0_1.0_w1_1.8_w2_0.2.csv')
     # df = pd.read_csv('results/ppg-exp/w0_0.41_w1_0.43_w2_0.13.csv')
-    df = pd.read_csv('results/ppg-exp/w0_0.35_w1_0.85_w2_0.15/stats.csv')
+    df = pd.read_csv('../results/ppg-exp/w0_0.35_w1_0.85_w2_0.15/stats.csv')
 
 
 
@@ -274,6 +274,7 @@ if __name__ == '__main__':
         'Centralized': df[df['policy'] == 'CPPG'].iloc[0].to_dict(),
         'Decentralized': df[df['policy'] == 'PPG'].iloc[0].to_dict(),
         'Epsilon Greedy': df[df['policy'] == 'EGreedy'].iloc[0].to_dict(),
+        'PPO': df[df['policy'] == 'PPO'].iloc[0].to_dict(),
         #     'Optimal Solution: 1 User': single_user_stats.summary_stats()['overall'],
     }
 
@@ -287,7 +288,7 @@ if __name__ == '__main__':
     cols = 'reward_mean,latency_mean,latency_p95,latency_p05,energy_mean,energy_p05,energy_p95,psnr_mean,psnr_p05,psnr_p95,ymse_mean,ymse_p05,ymse_p95,stall_total,offload_ratio,5G_ratio,4G_ratio,WiGig_ratio,quality_0_ratio,quality_1_ratio,quality_2_ratio,quality_3_ratio,quality_4_ratio,quality_5_ratio,quality_6_ratio,stall_time_mean,stall_time_p05,stall_time_p95,policy,seed,verbose,num_episodes,num_users,video_id,user_id,device_proc_speed,device_cpu_freq,edge_proc_speed,weights,csv_log,w0,w1,w2'
     cols = cols.split(',')
     # df = pd.read_csv('results/exp-18.csv', names=cols)
-    df = pd.read_csv('results/exp-21/exp-21.csv', names=cols)
+    df = pd.read_csv('../results/exp-21/exp-21.csv', names=cols)
 
     agg = (df
            .groupby(["w0", "w1", "w2"], as_index=False)

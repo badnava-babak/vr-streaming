@@ -100,6 +100,7 @@ class EpisodeStats:
                      rx_time: float,
                      ch_uplink_rates: List[float],
                      ch_downlink_rates: List[float],
+                     device_reward: float
                      ):
         self.device_stats[device_id].latency.append(latency)
         self.device_stats[device_id].energy_consumption.append(energy_consumption)
@@ -115,8 +116,7 @@ class EpisodeStats:
         self.device_stats[device_id].tx_times.append(tx_time)
         self.device_stats[device_id].ch_uplink_rates.append(ch_uplink_rates)
         self.device_stats[device_id].ch_downlink_rates.append(ch_downlink_rates)
-        self.device_stats[device_id].rewards.append(
-            self.w[0] * psnr - self.w[1] * latency - self.w[2] * energy_consumption)
+        self.device_stats[device_id].rewards.append(device_reward)
 
     def to_dict(self) -> dict:
         return dict(
