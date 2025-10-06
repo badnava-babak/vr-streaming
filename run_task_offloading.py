@@ -4,6 +4,7 @@ import os
 
 from tqdm import tqdm
 import json
+from distutils.util import strtobool
 import pickle
 from src.chennels.two_way_channel import TwoWayChannel
 from src.commons.io import load_all_videos, load_all_users, load_all_traces
@@ -49,12 +50,15 @@ def parse_args():
                    help="Policy / algorithm name (string)")
 
     p.add_argument("--seed", type=int, default=42, help="RNG seed or run id")
-    p.add_argument("--verbose", type=bool, default=False, help="Whether to print")
+    p.add_argument("--verbose", type=lambda x: bool(strtobool(x)),
+                   default=False, help="Whether to print")
     p.add_argument("--num_episodes", type=int, default=1000, help="Number of Episodes to train the policy")
 
     p.add_argument("--num-users", type=int, default=5, help="Number of Users in the Environments")
 
     p.add_argument("--video-id", type=int, default=0, help="Video ID")
+    p.add_argument("--random-video", type=lambda x: bool(strtobool(x)),
+                   default=False, help="Random Video Assignment")
     p.add_argument("--user-id", type=int, default=0, help="User ID for Head Navigation Data")
     p.add_argument("--device-proc-speed", type=float, default=200.e6,
                    help="Edge Device Processor Speed in bps")
@@ -70,10 +74,18 @@ def parse_args():
                    help="Weights of different objective functions. PSNR, Stall Time, and Energy Consumption")
 
     # p.add_argument("--stats-file", required=True, help="Path to pickled EpisodeStats object")
-    p.add_argument("--csv-log", default="results/ppg-exp", help="CSV file to append results to")
-    p.add_argument("--tensorboard", default=False, help="Whether to record tensorboard logs")
-    p.add_argument("--save-model", default=False, help="Whether to save the model")
-    p.add_argument("--load-model", default=False, help="Load a pretrained model to run a test")
+    p.add_argument("--csv-log", type=str,
+                   default="results/ppg-exp", help="CSV file to append results to")
+    p.add_argument("--tensorboard", type=lambda x: bool(strtobool(x)),
+                   default=False, help="Whether to record tensorboard logs")
+    p.add_argument("--save-model", type=lambda x: bool(strtobool(x)),
+                   default=False, help="Whether to save the model")
+    p.add_argument("--load-model", type=lambda x: bool(strtobool(x)),
+                   default=False, help="Load a pretrained model to run a test")
+    p.add_argument("--elastic", type=lambda x: bool(strtobool(x)), required=True,
+                   default=False, help="Whether to use elastic tasks or not")
+    p.add_argument("--elasticity-parameter", type=int,
+                   default=4, help="Elasticity Parameter in [1, 2, ..., 7]")
 
     return p.parse_args()
 
@@ -108,15 +120,24 @@ def run_sim(args):
         )
         args.num_episodes = 1
     elif args.policy == "PPG":
-        policy = MultiTaskPPGPolicy(num_channels=C,
-                                    num_users=N,
-                                    weights=(args.weights[0], args.weights[1], args.weights[2])
-                                    # psnr, stall time, energy
-                                    )
+        if args.elastic:
+            policy = MultiTaskPPGPolicy(num_channels=C,
+                                        num_users=N,
+                                        weights=(args.weights[0], args.weights[1], args.weights[2])
+                                        )
+        else:
+
+            policy = MultiTaskPPGPolicy(num_channels=C,
+                                        num_users=N,
+                                        weights=(args.weights[0], args.weights[1], args.weights[2]),
+                                        elastic=False,
+                                        elasticity_parameter=args.elasticity_parameter
+                                        )
     elif args.policy == "PPO":
         policy = PPOPolicy(num_channels=C,
                            num_users=N,
-                           weights=(args.weights[0], args.weights[1], args.weights[2])
+                           weights=(args.weights[0], args.weights[1], args.weights[2]),
+                           elasticity_parameter=args.elasticity_parameter
                            # psnr, stall time, energy
                            )
     elif args.policy == "CPPG":
@@ -188,7 +209,13 @@ def create_users(args):
     ch_5g_idx = np.random.randint(0, len(channels_5g), size=(N, 2))
     ch_4g_idx = np.random.randint(0, len(channels_4g), size=(N, 2))
     ch_wigig_idx = np.random.randint(0, len(channels_wiGig), size=(N, 2))
-    video_idx = np.random.randint(0, 9)
+    # video_idx = np.random.randint(0, 9, size=N)
+    video_idx = [int(args.video_id)] * N
+    if args.random_video:
+        video_idx = np.arange(0, N) % 9
+        # video_idx = [np.random.randint(0, 9)] * N
+    if args.verbose:
+        print('Video IDXs:', video_idx)
     for n in range(N):
         channels = [
             TwoWayChannel(channels_5g[ch_5g_idx[n][0]], channels_5g[ch_5g_idx[n][1]]),
@@ -198,8 +225,8 @@ def create_users(args):
         vr = VRDevice(channels=channels,
                       processing_rate=args.device_proc_speed,
                       cpu_freq=args.device_cpu_freq,
-                      video=videos[video_idx],
-                      user=video_users[video_idx][args.user_id]
+                      video=videos[video_idx[n]],
+                      user=video_users[video_idx[n]][args.user_id]
                       )
         vr_users.append(vr)
     return vr_users
@@ -228,9 +255,15 @@ if __name__ == "__main__":
     if not log_path.exists():
         log_path.mkdir(parents=True, exist_ok=False)
 
-    log_path = Path(log_dir + f"/{args.policy}.pkl")
-    with log_path.open("wb") as pkl_f:
-        pickle.dump(multi_user_stats.to_dict(), pkl_f)
+    if args.elastic:
+        log_path = Path(log_dir + f"/{args.num_users}u/{args.policy}.pkl")
+    else:
+        log_path = Path(log_dir + f"/{args.num_users}u/{args.policy}_{args.elasticity_parameter}.pkl")
+    # if not log_path.exists():
+    #     log_path.mkdir(parents=True, exist_ok=False)
+    if False:
+        with log_path.open("wb") as pkl_f:
+            pickle.dump(multi_user_stats.to_dict(), pkl_f)
 
     # log_path = Path(args.csv_log + f"/w0_{args.weights[0]}_w1_{args.weights[1]}_w2_{args.weights[2]}.csv")
     log_path = Path(log_dir + f"/stats.csv")

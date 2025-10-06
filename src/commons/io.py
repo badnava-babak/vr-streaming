@@ -41,7 +41,7 @@ def load_all_videos():
     n_videos = rd['bitrate'].shape[0]
     videos = {}
     for i in range(n_videos):
-        videos[i] = Video(rd['bitrate'][i], rd['ymse'][i], rd['bitdepth'][i])
+        videos[i] = Video(i, rd['bitrate'][i], rd['ymse'][i], rd['bitdepth'][i])
 
     return videos
 

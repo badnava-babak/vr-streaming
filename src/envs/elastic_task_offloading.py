@@ -94,6 +94,8 @@ class ElasticTaskOffloadingEnv:
                         [tasks[i].get_computational_intensity(q_idx) for i in range(self.nb_devices)])
                     offloaded_computations = ((offloading_decisions != 0).astype(int) * comp_intensities)
                     allocated_portion = offloaded_computations[device_id] / offloaded_computations.sum()
+                    if isinstance(policy, OptimalDecisionMaker):
+                        allocated_portion = 1.
 
                     exec_time = self.edge.process(arrival_edge, comp_intensity, allocated_portion, True)
                     # edge -> device
@@ -106,6 +108,7 @@ class ElasticTaskOffloadingEnv:
                                  - self.w[1] * processing_time
                                  - self.w[2] * energy_consumption)
                 device_reward += (10 * (1 - processing_time) if (1 - processing_time) < 0. else 0.)
+
 
                 # rewards.append((task.get_psnr(q_idx), processing_time, energy_consumption))
                 rewards.append(device_reward)
@@ -128,7 +131,8 @@ class ElasticTaskOffloadingEnv:
                                         tx_time, rx_time,
                                         state[device_id]['uplink_rates'],
                                         state[device_id]['downlink_rates'],
-                                        device_reward
+                                        device_reward,
+                                        self.devices[device_id].video.video_id
                                         )
 
                 # Reward recording

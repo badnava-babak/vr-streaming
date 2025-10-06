@@ -21,6 +21,7 @@ class DeviceStats:
     comp_intensity: List[int] = field(default_factory=list)
     rx_times: List[float] = field(default_factory=list)
     tx_times: List[float] = field(default_factory=list)
+    video_id: List[int] = field(default_factory=list)
     ch_uplink_rates: List[List[float]] = field(default_factory=list)
     ch_downlink_rates: List[List[float]] = field(default_factory=list)
 
@@ -45,6 +46,7 @@ class DeviceStats:
             downlink_5g_rates=np.array(self.ch_downlink_rates)[:, 0],
             downlink_4g_rates=np.array(self.ch_downlink_rates)[:, 1],
             downlink_wigig_rates=np.array(self.ch_downlink_rates)[:, 2],
+            video_id=np.array(self.video_id),
         )
 
     def summary_stats(self):
@@ -100,7 +102,8 @@ class EpisodeStats:
                      rx_time: float,
                      ch_uplink_rates: List[float],
                      ch_downlink_rates: List[float],
-                     device_reward: float
+                     device_reward: float,
+                     video_id: int
                      ):
         self.device_stats[device_id].latency.append(latency)
         self.device_stats[device_id].energy_consumption.append(energy_consumption)
@@ -117,6 +120,7 @@ class EpisodeStats:
         self.device_stats[device_id].ch_uplink_rates.append(ch_uplink_rates)
         self.device_stats[device_id].ch_downlink_rates.append(ch_downlink_rates)
         self.device_stats[device_id].rewards.append(device_reward)
+        self.device_stats[device_id].video_id.append(video_id)
 
     def to_dict(self) -> dict:
         return dict(

@@ -8,16 +8,19 @@ from src.commons.frame import Frame
 
 class Video:
     def __init__(self,
+                 video_id: int,
                  bitrate_df: pd.DataFrame,
                  ymse_df: pd.DataFrame,
                  bit_depth: int
                  ):
+
+        self.video_id = video_id
         self.bitrate_df = bitrate_df  # (QP, tile index, N=frame index)
         self.ymse_df = ymse_df  # (QP, tile index, N=frame index)
         self.bit_depth = bit_depth
         self.length = self.bitrate_df.shape[-1]
 
-    def get_frame(self, ctr: int, t: float, viewport: np.ndarray, fps:int) -> Frame:
+    def get_frame(self, ctr: int, t: float, viewport: np.ndarray, fps: int) -> Frame:
         content = self.bitrate_df[:, :, ctr * fps:(ctr + 1) * fps].sum(axis=2)
         ymse_info = self.ymse_df[:, :, ctr * fps:(ctr + 1) * fps].mean(axis=2)
 

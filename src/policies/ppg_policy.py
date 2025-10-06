@@ -21,9 +21,12 @@ class PPGPolicy(DecisionMaker):
 
 class MultiTaskPPGPolicy(PPGPolicy):
     def __init__(self, num_channels: int,
-                 num_users: int, weights: Tuple[float, float, float]):
+                 num_users: int, weights: Tuple[float, float, float], elastic=True,
+                 elasticity_parameter=1):
         super().__init__()
         self.w = weights
+        self.elastic = elastic
+        self.elasticity_parameter = elasticity_parameter
 
         K_epochs = 80  # update policy for K epochs in one PPO update\
         eps_clip = 0.2  # clip parameter for PPO
@@ -75,6 +78,8 @@ class MultiTaskPPGPolicy(PPGPolicy):
             # 7 x 4
             _q = action // 4
             _ch = action % 4
+            if not self.elastic:
+                _q = self.elasticity_parameter
             qs.append(_q)
             chs.append(_ch)
         return np.array(qs), np.array(chs)

@@ -4,14 +4,14 @@
 
 # ── edit these paths ───────────────────────────────────────────────
 PY_SCRIPT="$(realpath ./run_task_offloading.py)"       # ABSOLUTE path now
-CSV_LOG="results/exp-21"
+CSV_LOG="results/exp-f-5u"
 POLICY="Optimal"
-FIXED_ARGS=""                                  # e.g. "--env-config conf.yaml"
+FIXED_ARGS="--video-id 2 --elastic True --num-users 5 --edge-proc-speed 12.e9"
 # ───────────────────────────────────────────────────────────────────
 
 STEP=${1:-0.1}          # first arg = step, else 0.1
 JOBS=${2:-1}                 # second arg = parallelism, else 1
-SEED=0                       # will ++ inside loop
+SEED=42                       # will ++ inside loop
 
 run_cmd() {
   local w0=$1 w1=$2 w2=$3 seed=$4
@@ -42,7 +42,7 @@ generate_grid() {
       # keep only settings where w2 ≥ 0  (allow tiny rounding error)
 #      if awk -v c="$w1" 'BEGIN{exit(c<-1e-12)}'; then
         printf "%s %s %s %s\n" "$w0" "$w1" "$w2" "$SEED"
-        ((SEED++))
+#        ((SEED++))
 #      fi
       done
     done
@@ -58,3 +58,6 @@ else
     run_cmd "$w0" "$w1" "$w2" "$seed"
   done < <(generate_grid)
 fi
+
+#head -n 1 -q  w0_0.15_w1_0.15_w2_0.15/stats.csv > exp.csv
+#tail -n 1 -q  w0*/stats.csv >> exp.csv

@@ -2,9 +2,9 @@
 
 #source /scratch/b502b586/venv/sdxl/bin/activate
 
-CSV_LOG="/home/b502b586/workspaces/vr-streaming/results/ppg-exp"
+CSV_LOG="/home/b502b586/workspaces/vr-streaming/results/multi-video"
 PY_SCRIPT="$(realpath ./run_task_offloading.py)"       # ABSOLUTE path now
-FIXED_ARGS="--video-id 2 --save-model True --tensorboard False --verbose True --num-users 8 --num_episodes 1000 --edge-proc-speed 12.e9"
+FIXED_ARGS="--random-video True --elastic True --save-model True --tensorboard False --verbose True --num-users 8 --num_episodes 5000 --edge-proc-speed 12.e9"
 
 
 
@@ -24,8 +24,8 @@ w1=0.85
 w2=0.15
 # echo "These are the parameters for this job: $PARAMS --- $s -- $CSV_LOG"
 run_cmd $w0 $w1 $w2 42 "Optimal"
-#run_cmd $w0 $w1 $w2 42 "PPG"
-#run_cmd $w0 $w1 $w2 42 "CPPG"
+run_cmd $w0 $w1 $w2 42 "PPG"
+run_cmd $w0 $w1 $w2 42 "CPPG"
 #run_cmd $w0 $w1 $w2 42 "EGreedy"
 #run_cmd $w0 $w1 $w2 42 "PPO"
 

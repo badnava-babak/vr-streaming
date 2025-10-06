@@ -132,7 +132,7 @@ if __name__ == '__main__':
     data = {
         'Optimal': prepare_data(bins, 'results/ppg-exp/w0_0.35_w1_0.85_w2_0.15/Optimal.pkl', False)[0],
         'CPPG': prepare_data(bins, 'results/ppg-exp/w0_0.35_w1_0.85_w2_0.15/CPPG.pkl')[0],
-        'PPG': prepare_data(bins, 'results/ppg-exp/w0_0.35_w1_0.85_w2_0.15/PPG.pkl')[0],
+        'PPG': prepare_data(bins, 'results/ppg-exp/w0_0.35_w1_0.85_w2_0.15/PPG.pkl', False)[0],
         'EGreedy': prepare_data(bins, 'results/ppg-exp/w0_0.35_w1_0.85_w2_0.15/EGreedy.pkl')[0],
         'PPO': prepare_data(bins, 'results/ppg-exp/w0_0.35_w1_0.85_w2_0.15/PPO.pkl')[0],
     }

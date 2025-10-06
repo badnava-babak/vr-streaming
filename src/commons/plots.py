@@ -6,18 +6,20 @@ def get_label(metric):
         label = "Objective Value"
     elif metric == 'rewards':
         label = "$\mathit{QTE}(\mathbf{e}, \mathbf{u})$ [Reward]"
-    elif metric == 'reward_mean':
+    elif metric == 'reward_mean' or metric == 'rewards_mean':
         label = "Avg. Reward"
-    elif metric == 'energy_mean':
-        label = "Avg. Energy Consumption (mW)"
+    elif metric == 'energy_mean' or metric == 'energy_consumption_mean':
+        label = "Avg. Energy Consumption (mJoule)"
     elif metric == 'energy_consumption':
-        label = "$E(\mathbf{e}, \mathbf{u})$ [Energy Consumption (mW)]"
+        label = "$E(\mathbf{e}, \mathbf{u})$ [Energy Consumption (mJoule)]"
     elif metric == 'latency_mean':
         label = "Avg. Response Time (s)"
     elif metric == 'latency':
         label = "$T(\mathbf{e}, \mathbf{u})$ [Latency (s)]"
     elif metric == 'psnr_mean':
         label = "Avg. PSNR (dB)"
+    elif metric == 'p_psnr_mean':
+        label = "Avg. Perceived PSNR (dB)"
     elif metric == 'psnr':
         label = "$Q(\mathbf{e})$ [PSNR (dB)]"
     elif metric == 'stall_time_mean':
@@ -48,6 +50,8 @@ def get_label(metric):
         label = "Number of Users"
     elif metric == 'task_size':
         label = "Task Size (Gb)"
+    elif metric == 'throughput':
+        label = "Transmission Rate (Gb)"
     else:
         label = "Unknown Metric"
 
@@ -96,6 +100,43 @@ def plot_x_vs_y(policy_performance_results, x_label, y_label, save: str=None, er
     # plt.show()
 
 
+
+def plot_x_vs_y2(policy_performance_results, x_label, y_label, save: str=None, error_bar=True, legend=False):
+    fig, ax = plt.subplots(figsize=(7, 6))
+    markers = ['^', 'o', '*', 'v', 'd']
+    i = -1
+    for label, stats in policy_performance_results.items():
+        i += 1
+        ax.scatter(stats[x_label].mean(),
+                   stats[y_label].mean(),
+                   alpha=0.85, edgecolors="k", s=250, linewidth=0.5, label=label, marker=markers[i])
+        if error_bar:
+            err_left = max(0, stats[x_label].mean() - stats[x_label].quantile(0.05))
+            err_right = max(0, stats[x_label].quantile(0.95) - stats[x_label].mean())
+            err_low = max(0, stats[y_label].mean() - stats[y_label].quantile(0.05))
+            err_high = max(0, stats[y_label].quantile(0.95) - stats[y_label].mean())
+            ax.errorbar(stats[x_label].mean(),
+                        stats[y_label].mean(),
+                        xerr=[[err_left], [err_right]],
+                        yerr=[[err_low], [err_high]],
+                        fmt="none",
+                        ecolor="gray",
+                        alpha=0.8,
+                        markersize=15,
+                        capsize=3,
+                        linewidth=0.8)
+
+    ax.set_xlabel(get_label('%s_mean' % x_label), fontsize=18, fontweight='bold')
+    ax.set_ylabel(get_label('%s_mean' % y_label), fontsize=18, fontweight='bold')
+    ax.tick_params(axis='both', labelsize=18)
+
+    ax.grid(color='gray', linestyle='-', linewidth=1, alpha=0.2)
+    plt.tight_layout()
+    if legend:
+        plt.legend(fontsize=18, framealpha=.6)
+
+    if save:
+        plt.savefig(save)
 def plot_metric_distribution(policy_performance_results, metric):
     fig, ax = plt.subplots(figsize=(6, 5))
     for label, stats in policy_performance_results.items():

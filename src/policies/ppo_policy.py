@@ -8,9 +8,10 @@ from src.policies.ppo.PPO import PPO
 
 class PPOPolicy(PPGPolicy):
     def __init__(self, num_channels: int,
-                 num_users: int, weights: Tuple[float, float, float]):
+                 num_users: int, weights: Tuple[float, float, float], elasticity_parameter):
         super().__init__()
         self.w = weights
+        self.elasticity_parameter = elasticity_parameter
 
         K_epochs = 80  # update policy for K epochs in one PPO update\
         eps_clip = 0.2  # clip parameter for PPO
@@ -67,7 +68,7 @@ class PPOPolicy(PPGPolicy):
             s = np.concatenate([np.array(taks_info).flatten(), ch_info])
             action = ppg_agent.select_action(s)[0]
             # 7 x 4
-            _q = 3
+            _q = self.elasticity_parameter
             _ch = action % 4
             qs.append(_q)
             chs.append(_ch)

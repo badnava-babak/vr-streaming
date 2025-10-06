@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib import cm
 
-from src.commons.plots import plot_x_vs_y, get_label
+from src.commons.plots import plot_x_vs_y, get_label, plot_x_vs_y2
 from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes, mark_inset
 
 
@@ -118,7 +118,6 @@ def plot_w_vs_metric(df, w, metrics, multi_axis=True, save: str = None):
         plt.savefig('results/figs/{}.pdf'.format(save), dpi=300)
 
 
-
 def plot_contours(agg, metric):
     # levels = [0., .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.]  # np.linspace(0, 2, 6)  # or np.linspace(0,10,6)
     levels = [.05]  # np.linspace(0, 2, 6)  # or np.linspace(0,10,6)
@@ -153,7 +152,7 @@ def plot_contours(agg, metric):
     # plt.show()
 
 
-def plot_pareto_set(agg, metrics, sense, plot_non_pareto=False, save:str=None):
+def plot_pareto_set(agg, metrics, sense, plot_non_pareto=False, save: str = None):
     is_3d = len(metrics) > 2
     mask = paretoset(agg[metrics], sense=sense)
     pareto_front = agg[mask]
@@ -196,9 +195,8 @@ def plot_pareto_set(agg, metrics, sense, plot_non_pareto=False, save:str=None):
         ax.patch.set_alpha(0.5)
         ax.tick_params(length=0)
 
-
         # ax.scatter(opt_point['latency_mean'], opt_point['psnr_mean'], opt_point['energy_mean'], c='black',
-    #             s=150, label=f"best $W_0$: {opt_point['w0']}, $W_1$: {opt_point['w1']}, $W_2$: {opt_point['w2']}")
+        #             s=150, label=f"best $W_0$: {opt_point['w0']}, $W_1$: {opt_point['w1']}, $W_2$: {opt_point['w2']}")
 
         ax.set_xlabel(get_label(metrics[0]), fontsize=18, fontweight='bold')
         ax.set_ylabel(get_label(metrics[1]), fontsize=18, fontweight='bold')
@@ -206,10 +204,9 @@ def plot_pareto_set(agg, metrics, sense, plot_non_pareto=False, save:str=None):
         # plt.legend(fontsize=18, framealpha=.6)
         plt.tight_layout()
 
-
         if metrics == ['energy_mean', 'latency_mean']:
             # Create zoomed inset axes
-            x1, x2, y1, y2 = 0.29, 0.36, 0.2, 0.38  # Define the region to zoom
+            x1, x2, y1, y2 = 0.29, 0.58, 0.15, 0.29  # Define the region to zoom
             # axins = zoomed_inset_axes(ax, zoom=1.5, loc='lower right')  # Zoom in by 2.5, place in lower right
             axins = ax.inset_axes(
                 [0.58, 0.05, 0.4, 0.3],
@@ -227,7 +224,8 @@ def plot_pareto_set(agg, metrics, sense, plot_non_pareto=False, save:str=None):
             # axins.set_yticks([])
 
             # Mark the inset region on the main plot
-            mark_inset(ax, axins, loc1=2, loc2=4, fc="none", ls='dashed', ec="black", lw=1.5, alpha=0.8)  # Connect top-left of zoom box to bottom-right of inset
+            mark_inset(ax, axins, loc1=2, loc2=4, fc="none", ls='dashed', ec="black", lw=1.5,
+                       alpha=0.8)  # Connect top-left of zoom box to bottom-right of inset
             axins.tick_params(axis='both', colors='black', labelsize=10)
             axins.grid(color='white', linestyle='-', linewidth=1, alpha=0.7)
             axins.set_facecolor('lightgray')
@@ -240,9 +238,12 @@ def plot_pareto_set(agg, metrics, sense, plot_non_pareto=False, save:str=None):
             # Get the y-axis tick labels and set their font weight to bold
             for label in axins.get_yticklabels():
                 label.set_fontweight('bold')
-        else:
+        elif metrics == ['energy_mean', 'psnr_mean']:
             # ax.text(1.5, 50.5, 'Example Text')
             ax.text(.38, 48., 'Pareto Frontier', fontsize=16, color='crimson', fontweight='bold', rotation=30)
+        elif metrics == ['latency_mean', 'psnr_mean']:
+            # ax.text(1.5, 50.5, 'Example Text')
+            ax.text(.24, 48., 'Pareto Frontier', fontsize=16, color='crimson', fontweight='bold', rotation=30)
 
     if save:
         plt.savefig(save, dpi=300)
@@ -252,43 +253,63 @@ def plot_pareto_set(agg, metrics, sense, plot_non_pareto=False, save:str=None):
 
 if __name__ == '__main__':
     # Define the new header
-    new_header_list = ['policy', 'seed', 'num_users', 'video_id',
-                       'user_id', 'device_proc_speed', 'device_cpu_freq',
-                       'edge_proc_speed', 'w0', 'w1', 'w2', 'csv_log',
-                       'latency_mean', 'latency_p95', 'latency_p05',
-                       'energy_mean', 'energy_p5', 'energy_p95',
-                       'psnr_mean', 'psnr_p05', 'psnr_p95',
-                       'ymse_mean', 'ymse_p05', 'ymse_p95',
-                       'stall_total',
-                       'offload_ratio', '5G_ratio', '4G_ratio', 'WiGig_ratio']
-
-    # df = pd.read_csv('results/ppg-exp/w0_0.8_w1_2.8_w2_0.8.csv')
-    # df = pd.read_csv('results/ppg-exp/w0_1.0_w1_1.8_w2_0.2.csv')
-    # df = pd.read_csv('results/ppg-exp/w0_0.41_w1_0.43_w2_0.13.csv')
-    df = pd.read_csv('../results/ppg-exp/w0_0.35_w1_0.85_w2_0.15/stats.csv')
+    import pickle
 
 
+    def load_raw_data(file_path):
+        f = open(file_path, 'rb')
+        ppg_data = pickle.load(f)
+        df = pd.concat([pd.DataFrame(v) for v in ppg_data.values()])
+        df['p_psnr'] = df['psnr'].copy()
+        df.loc[df['latency'] > 1, 'p_psnr'] = 0
+        return df
 
+
+    methods = ['Optimal', 'CPPG', 'IPPG', 'EGreedy', 'PPO']
+    data_raw = {
+        i: load_raw_data(f'results/ppg-exp/w0_0.35_w1_0.85_w2_0.15/video-2/3u/{i}.pkl') for i in methods
+    }
+    data_raw['EA-Offloader'] = data_raw.pop('PPO')
+    for key, row in data_raw.items():
+        row_str = f"{key} & "
+        row_str += f"${row['rewards'].mean():.2f}$ &"
+        row_str += f"${row['psnr'].mean():.2f} \pm {row['psnr'].std():.2f}$ &"
+        row_str += f"${row['p_psnr'].mean():.2f} \pm {row['p_psnr'].std():.2f}$ &"
+        row_str += f"${row['latency'].mean():.2f} \pm {row['latency'].std():.2f}$ & "
+        row_str += f"${row['energy_consumption'].mean():.2f} \pm {row['energy_consumption'].std():.2f}$ &"
+        row_str += f"${(row['latency'] > 1.).mean()*100:.1f}$ \\\\"
+        print(row_str)
+
+    # plot_x_vs_y2(data_raw, x_label='p_psnr', y_label='rewards', error_bar=False)
+    # plot_x_vs_y2(data_raw, x_label='energy_consumption', y_label='p_psnr', save='results/figs/energy_vs_psnr.pdf')
+    # plot_x_vs_y2(data_raw, x_label='latency', y_label='p_psnr', save='results/figs/latency_vs_psnr.pdf', legend=True)
+    # plot_x_vs_y2(data_raw, x_label='energy_consumption', y_label='latency', save='results/figs/energy_vs_latency.pdf')
+    # plt.show()
+
+    df = pd.read_csv('results/ppg-exp/w0_0.35_w1_0.85_w2_0.15/video-2/stats-video-2.csv')
+
+    df = df[df['num_users'] == 3]
     overall_ = {
         'Optimal': df[df['policy'] == 'Optimal'].iloc[0].to_dict(),
-        'Centralized': df[df['policy'] == 'CPPG'].iloc[0].to_dict(),
-        'Decentralized': df[df['policy'] == 'PPG'].iloc[0].to_dict(),
-        'Epsilon Greedy': df[df['policy'] == 'EGreedy'].iloc[0].to_dict(),
-        'PPO': df[df['policy'] == 'PPO'].iloc[0].to_dict(),
+        'CPPG': df[df['policy'] == 'CPPG'].iloc[0].to_dict(),
+        'IPPG': df[df['policy'] == 'PPG'].iloc[0].to_dict(),
+        'EGreedy': df[df['policy'] == 'EGreedy'].iloc[0].to_dict(),
+        'EA-Offloader': df[df['policy'] == 'PPO'].iloc[0].to_dict(),
         #     'Optimal Solution: 1 User': single_user_stats.summary_stats()['overall'],
     }
 
     for k, v in overall_.items():
-        print(f"{k} &  {v['reward_mean']:.3f} & {v['psnr_mean']:.3f} & {v['latency_mean']:.3f} & {v['energy_mean']:.3f} & {v['deadline_violation']:.3f}")
-    plot_x_vs_y(overall_, x_label='psnr', y_label='reward', error_bar=False)
-    plot_x_vs_y(overall_, x_label='energy', y_label='psnr', save='results/figs/energy_vs_psnr.pdf')
-    plot_x_vs_y(overall_, x_label='latency', y_label='psnr', save='results/figs/latency_vs_psnr.pdf')
-    plot_x_vs_y(overall_, x_label='energy', y_label='latency', save='results/figs/energy_vs_latency.pdf')
-    # plt.show()
+        print(
+            f"{k} &  ${v['reward_mean']:.3f}$ & ${v['psnr_mean']:.3f}$ & ${v['latency_mean']:.3f}$ & ${v['energy_mean']:.3f}$ & ${v['deadline_violation']:.3f}$")
+    # plot_x_vs_y(overall_, x_label='psnr', y_label='reward', error_bar=False)
+    # plot_x_vs_y(overall_, x_label='energy', y_label='psnr', save='results/figs/energy_vs_psnr.pdf')
+    # plot_x_vs_y(overall_, x_label='latency', y_label='psnr', save='results/figs/latency_vs_psnr.pdf')
+    # plot_x_vs_y(overall_, x_label='energy', y_label='latency', save='results/figs/energy_vs_latency.pdf')
+    plt.show()
     cols = 'reward_mean,latency_mean,latency_p95,latency_p05,energy_mean,energy_p05,energy_p95,psnr_mean,psnr_p05,psnr_p95,ymse_mean,ymse_p05,ymse_p95,stall_total,offload_ratio,5G_ratio,4G_ratio,WiGig_ratio,quality_0_ratio,quality_1_ratio,quality_2_ratio,quality_3_ratio,quality_4_ratio,quality_5_ratio,quality_6_ratio,stall_time_mean,stall_time_p05,stall_time_p95,policy,seed,verbose,num_episodes,num_users,video_id,user_id,device_proc_speed,device_cpu_freq,edge_proc_speed,weights,csv_log,w0,w1,w2'
     cols = cols.split(',')
     # df = pd.read_csv('results/exp-18.csv', names=cols)
-    df = pd.read_csv('../results/exp-21/exp-21.csv', names=cols)
+    df = pd.read_csv('results/exp-f-5u/exp.csv')
 
     agg = (df
            .groupby(["w0", "w1", "w2"], as_index=False)

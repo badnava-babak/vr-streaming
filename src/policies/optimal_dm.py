@@ -92,4 +92,7 @@ class OptimalDecisionMaker(DecisionMaker):
 
         optimal_q = np.argmax(obj_values) // 4
         optimal_ch = np.argmax(obj_values) % 4
+        # if 1 - total_times[optimal_q, optimal_ch] < 0:
+        #     print('Deadline Violation', 1- total_times)
+            # raise Exception('Deadline Violation')
         return optimal_q, optimal_ch
